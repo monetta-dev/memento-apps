@@ -11,8 +11,8 @@
   "license": "ISC",
   "workspaces": [
     "memento-1on1",
-    "memento-analysis",
-    "memento-recruit"
+    "memento-analytics",
+    "memento-community"
   ],
   "type": "commonjs"
 }

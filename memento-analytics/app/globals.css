@@ -1,0 +1,61 @@
+@import "tailwindcss";
+@import '@xyflow/react/dist/style.css';
+
+:root {
+  --background: #fcfaf2;  /* 胡粉色 */
+  --foreground: #2b2b2b;  /* 墨色 */
+  --primary: #223a70;     /* 紺色 */
+  --accent: #c9171e;      /* 朱色 */
+  --font-serif: "Hiragino Mincho ProN", "Yu Mincho", "YuMincho", serif;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-accent: var(--accent);
+  --font-serif: var(--font-serif);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-serif), Arial, Helvetica, sans-serif;
+  /* Subtle paper texture */
+  background-image: radial-gradient(#dcdcdc 1px, transparent 1px), radial-gradient(#dcdcdc 1px, transparent 1px);
+  background-size: 20px 20px;
+  background-position: 0 0, 10px 10px;
+  background-attachment: fixed;
+}
+
+/* Wagara Patterns */
+.pattern-seigaiha {
+  background-color: var(--primary);
+  background-image:
+    radial-gradient(circle at 100% 150%, var(--primary) 24%, var(--background) 25%, var(--background) 28%, var(--primary) 29%, var(--primary) 36%, var(--background) 36%, var(--background) 40%, transparent 40%, transparent),
+    radial-gradient(circle at 0 150%, var(--primary) 24%, var(--background) 25%, var(--background) 28%, var(--primary) 29%, var(--primary) 36%, var(--background) 36%, var(--background) 40%, transparent 40%, transparent),
+    radial-gradient(circle at 50% 100%, var(--background) 10%, var(--primary) 11%, var(--primary) 23%, var(--background) 23%, var(--background) 30%, var(--primary) 30%, var(--primary) 43%, var(--background) 43%, var(--background) 50%, var(--primary) 50%, var(--primary) 63%, var(--background) 63%, var(--background) 71%, transparent 71%, transparent),
+    radial-gradient(circle at 100% 50%, var(--background) 5%, var(--primary) 6%, var(--primary) 15%, var(--background) 15%, var(--background) 20%, var(--primary) 20%, var(--primary) 29%, var(--background) 29%, var(--background) 34%, var(--primary) 34%, var(--primary) 44%, var(--background) 44%, var(--background) 49%, transparent 49%, transparent),
+    radial-gradient(circle at 0 50%, var(--background) 5%, var(--primary) 6%, var(--primary) 15%, var(--background) 15%, var(--background) 20%, var(--primary) 20%, var(--primary) 29%, var(--background) 29%, var(--background) 34%, var(--primary) 34%, var(--primary) 44%, var(--background) 44%, var(--background) 49%, transparent 49%, transparent);
+  background-size: 30px 15px;
+}
+
+/* Wafu Components Styling */
+.wafu-card {
+  background-color: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.05);
+  position: relative;
+  overflow: hidden;
+}
+
+.wafu-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: url("data:image/svg+xml,%3Csvg width='4' height='4' viewBox='0 0 4 4' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 3h1v1H1V3zm2-2h1v1H3V1z' fill='%23000000' fill-opacity='0.03' fill-rule='evenodd'/%3E%3C/svg%3E");
+  pointer-events: none;
+}
