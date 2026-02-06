@@ -15,8 +15,6 @@ const eslintConfig = defineConfig([
   ]),
 ]);
 
-if (process.env.SKIP_LINT) {
-  eslintConfig.push({ ignores: ["**/*"] });
-}
+
 
 export default eslintConfig;
