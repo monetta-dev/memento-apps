@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { ConfigProvider } from "antd";
+import { ConfigProvider, App } from "antd";
 import theme from "@/theme/themeConfig";
 import AntdRegistry from "@/lib/AntdRegistry";
 import { AuthProvider } from "@/components/AuthProvider";
@@ -34,9 +34,11 @@ export default function RootLayout({
       >
         <AntdRegistry>
           <ConfigProvider theme={theme} warning={{ strict: false }}>
-            <AuthProvider>
-              {children}
-            </AuthProvider>
+            <App>
+              <AuthProvider>
+                {children}
+              </AuthProvider>
+            </App>
           </ConfigProvider>
         </AntdRegistry>
       </body>
