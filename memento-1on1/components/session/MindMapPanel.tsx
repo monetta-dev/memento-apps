@@ -12,7 +12,8 @@ import {
   useReactFlow,
   ReactFlowProvider
 } from '@xyflow/react';
-import { Button, Space, Tooltip, Modal, Input, type InputRef } from 'antd';
+import { Button, Space, Tooltip, type InputRef } from 'antd';
+import type { NodeChange } from '@xyflow/react';
 import {
   PlusCircleOutlined,
   NodeIndexOutlined,
@@ -78,23 +79,63 @@ const MindMapContent: React.FC<MindMapPanelProps> = ({ isReadOnly = false }) => 
   }, [pastStates, futureStates]);
 
 
-  // Renaming state
-  const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
-  const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
-  const [editingLabel, setEditingLabel] = useState('');
-  const [isCreatingNode, setIsCreatingNode] = useState(false);
   const inputRef = useRef<InputRef>(null);
+  const mindMapContainerRef = useRef<HTMLDivElement>(null); // Ref for container focus
 
-  // Auto-focus input when modal opens
+  // Handler Refs
+  const handleLabelChangeRef = useRef<(id: string, newLabel: string, intent?: 'TAB' | 'ENTER') => void>(() => { });
+  const handleEditBlurRef = useRef<(id: string) => void>(() => { });
+
+
+  // Declare refs to break circular dependencies
+  const addChildNodeRef = useRef<() => void>(() => { });
+
+  // Inline Editing Handlers
+  const handleLabelChange = useCallback((id: string, newLabel: string, intent?: 'TAB' | 'ENTER') => {
+    setNodes((nds) =>
+      nds.map((node) => {
+        if (node.id === id) {
+          return {
+            ...node,
+            data: { ...node.data, label: newLabel, isEditing: false },
+          };
+        }
+        return node;
+      })
+    );
+
+    // Refocus container
+    setTimeout(() => {
+      mindMapContainerRef.current?.focus();
+
+      // Handle intention
+      if (intent === 'TAB') {
+        addChildNodeRef.current();
+      }
+    }, 0);
+  }, [setNodes]);
+
+  const handleEditBlur = useCallback((id: string) => {
+    setNodes((nds) =>
+      nds.map((node) => {
+        if (node.id === id) {
+          return {
+            ...node,
+            data: { ...node.data, isEditing: false },
+          };
+        }
+        return node;
+      })
+    );
+    // Refocus container on blur so shortcuts work immediately
+    mindMapContainerRef.current?.focus();
+  }, [setNodes]);
+
+  // Update refs
   useEffect(() => {
-    if (isRenameModalOpen) {
-      const timer = setTimeout(() => {
-        inputRef.current?.focus();
-        inputRef.current?.select();
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [isRenameModalOpen]);
+    handleLabelChangeRef.current = handleLabelChange;
+    handleEditBlurRef.current = handleEditBlur;
+  }, [handleLabelChange, handleEditBlur]);
 
   // Declare applyAutoLayout and toggleNodeExpansion using refs to break circular dependency
   const applyAutoLayoutRef = useRef<(currentNodes: CustomNode[], currentEdges: Edge[], focusNodeId?: string) => void>(() => { });
@@ -135,7 +176,9 @@ const MindMapContent: React.FC<MindMapPanelProps> = ({ isReadOnly = false }) => 
         data: {
           ...node.data,
           hasChildren,
-          onToggle: (id: string) => toggleNodeExpansionRef.current(id)
+          onToggle: (id: string) => toggleNodeExpansionRef.current(id),
+          onLabelChange: (id: string, label: string, intent?: 'TAB' | 'ENTER') => handleLabelChangeRef.current(id, label, intent),
+          onEditBlur: (id: string) => handleEditBlurRef.current(id)
         }
       };
     });
@@ -175,6 +218,7 @@ const MindMapContent: React.FC<MindMapPanelProps> = ({ isReadOnly = false }) => 
         const { zoom } = getViewport();
         // Use fitView to robustly focus on the node using ReactFlow's internal logic
         // We set minZoom and maxZoom to current zoom to prevent zooming in/out, just pan.
+        // Timeout reduced to 50ms to start panning almost immediately (but after render)
         setTimeout(() => {
           fitView({
             nodes: [{ id: focusNodeId }],
@@ -182,7 +226,7 @@ const MindMapContent: React.FC<MindMapPanelProps> = ({ isReadOnly = false }) => 
             minZoom: zoom,
             maxZoom: zoom,
           });
-        }, 0);
+        }, 50);
       }
     }
   }, [setNodes, setEdges, setCenter, getViewport, fitView]); // Store actions are stable
@@ -207,7 +251,7 @@ const MindMapContent: React.FC<MindMapPanelProps> = ({ isReadOnly = false }) => 
     const newNode: CustomNode = {
       id: newNodeId,
       position: { x: selectedNode.position.x + 200, y: selectedNode.position.y },
-      data: { label: 'New Topic', expanded: true },
+      data: { label: 'New Topic', expanded: true, isEditing: true },
       type: 'mindMap',
       selected: true, // Auto-select new node
       width: 172,
@@ -227,20 +271,14 @@ const MindMapContent: React.FC<MindMapPanelProps> = ({ isReadOnly = false }) => 
 
     applyAutoLayout(updatedNodes, updatedEdges, newNodeId);
 
-    // Auto-open rename modal
-    setEditingNodeId(newNodeId);
-    setEditingLabel(newNode.data.label);
-    setIsRenameModalOpen(true);
-    setIsCreatingNode(true);
-    // Pause recording logic handling?
-    // Actually Zundo tracks every setNodes.
-    // Ideally we want 1 history item for Add + Rename.
-    // We can pause() here? No, 'Add' needs to be recorded.
-    // Retain 'isCreatingNode' logic to handle consolidation or rely on zundo's grouping if implemented.
-    // For now, let zundo snapshot 'Add'. If we want to group rename, we might need a transaction.
-    // Or we pause() before rename?
-
+    // Initial edit mode for new node
   }, [getNodes, getEdges, applyAutoLayout]);
+
+  // Update ref
+  useEffect(() => {
+    addChildNodeRef.current = addChildNode;
+  }, [addChildNode]);
+
 
   const addSiblingNode = useCallback(() => {
     const currentNodes = getNodes();
@@ -259,7 +297,7 @@ const MindMapContent: React.FC<MindMapPanelProps> = ({ isReadOnly = false }) => 
     const newNode: CustomNode = {
       id: newNodeId,
       position: { x: selectedNode.position.x, y: selectedNode.position.y + 100 },
-      data: { label: 'New Topic', expanded: true },
+      data: { label: 'New Topic', expanded: true, isEditing: true },
       type: 'mindMap',
       selected: true, // Auto-select
       width: 172,
@@ -278,10 +316,7 @@ const MindMapContent: React.FC<MindMapPanelProps> = ({ isReadOnly = false }) => 
 
     applyAutoLayout(updatedNodes, updatedEdges, newNodeId);
 
-    setEditingNodeId(newNodeId);
-    setEditingLabel(newNode.data.label);
-    setIsRenameModalOpen(true);
-    setIsCreatingNode(true);
+
   }, [getNodes, getEdges, applyAutoLayout]);
 
   const deleteSelectedNodes = useCallback(() => {
@@ -337,81 +372,20 @@ const MindMapContent: React.FC<MindMapPanelProps> = ({ isReadOnly = false }) => 
 
   const onNodeDoubleClickInternal = useCallback((event: React.MouseEvent, node: CustomNode) => {
     if (isReadOnly) return;
-    setEditingNodeId(node.id);
-    setEditingLabel(node.data.label);
-    setIsRenameModalOpen(true);
-  }, [isReadOnly]);
-
-  const handleRenameSave = useCallback((e?: React.KeyboardEvent | React.MouseEvent) => {
-    if (e) e.stopPropagation();
-
-    if (!editingNodeId) return;
-
-    // Implementation Note:
-    // With Zundo, every state change is recorded.
-    // If 'isCreatingNode' is true, we just Added a node (1 history).
-    // Now we Rename it. This adds another history step.
-    // Users prefer "Add+Rename" as 1 step.
-    // Zundo doesn't support 'retroactive merge' easily without transactions.
-    // WORKAROUND: We can just let it be 2 steps to start with (Safe), 
-    // OR we can try to pause() tracking during 'Add' and resume() after 'Rename'?
-    // No, we want 'Add' to be undoable if we Cancel rename.
-    // The previous manual logic skipped snapshot on Rename if isCreatingNode.
-
-    // Zundo Logic:
-    // We can pause tracking *before* the rename state update if isCreatingNode is true?
-    // But then the Rename isn't tracked? So Undo would revert the Name change?
-    // If we pause, the Rename mutation applies but history doesn't see it.
-    // So Undo goes back to 'Before Add'? No, Zundo doesn't know about the Pause mutation?
-    // Actually if we Pause, the state changes but history pointer stays.
-    // So Undo would jump back to state BEFORE the Pause changes (i.e. before Rename).
-    // Which is the 'Add' state.
-
-    // Desired: Undo from (Add+Rename) -> (Pre-Add).
-    // Means we want to overwite the 'Add' history entry with the 'Add+Rename' state?
-    // Zundo doesn't support overwrite.
-
-    // Alternative: We accept 2 steps for now, or use `isCreatingNode` to simply NOT Pause, 
-    // but maybe we can merge?
-
-    // Let's stick to standard behavior first: Every change is a snapshot.
-    // If users complain about 2 steps, we refine.
-    // Actually, manual implementation had this refinement.
-    // We can achieve this by:
-    // 1. pause() before Add? No.
-    // 2. pause() before Rename? Then Undo -> Add State (with old name).
-    // So User un-renames, then un-adds. That is 2 steps.
-
-    // To get 1 step: We need the 'Add' action NOT to create a history entry yet?
-    // But we need to see it.
-
-    // For now, I will create a standard save. 
-    // We can optimize 'isCreatingNode' later if needed.
-    // OR: We use `interaction` grouping if we had it, but Zundo is simple.
-    // Actually, if we use `pause()` during `Add`... no.
-
-    // Let's implement standard SetNodes.
-
     setNodes((nds) =>
-      nds.map((node) => {
-        if (node.id === editingNodeId) {
+      nds.map((n) => {
+        if (n.id === node.id) {
           return {
-            ...node,
-            selected: true,
-            data: {
-              ...node.data,
-              label: editingLabel,
-            },
+            ...n,
+            data: { ...n.data, isEditing: true },
           };
         }
-        return { ...node, selected: false };
+        return n;
       })
     );
-    setIsRenameModalOpen(false);
-    setEditingNodeId(null);
-    setEditingLabel('');
-    setIsCreatingNode(false);
-  }, [editingNodeId, editingLabel, setNodes, isCreatingNode]);
+  }, [isReadOnly, setNodes]);
+
+
 
   const moveSelection = useCallback((key: string) => {
     const selectedNode = getSelectedNode() as CustomNode | undefined;
@@ -486,7 +460,7 @@ const MindMapContent: React.FC<MindMapPanelProps> = ({ isReadOnly = false }) => 
 
   const onKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
     if (event.nativeEvent.isComposing) return;
-    if (isReadOnly || isRenameModalOpen) return;
+    if (isReadOnly) return;
 
     const activeElement = document.activeElement;
     const isInput = activeElement instanceof HTMLInputElement || activeElement instanceof HTMLTextAreaElement;
@@ -525,9 +499,12 @@ const MindMapContent: React.FC<MindMapPanelProps> = ({ isReadOnly = false }) => 
         event.preventDefault();
         const selectedNode = getSelectedNode();
         if (selectedNode) {
-          setEditingNodeId(selectedNode.id);
-          setEditingLabel(selectedNode.data.label as string);
-          setIsRenameModalOpen(true);
+          setNodes((nds) => nds.map((n) => {
+            if (n.id === selectedNode.id) {
+              return { ...n, data: { ...n.data, isEditing: true } };
+            }
+            return n;
+          }));
         }
         break;
       case 'ArrowUp':
@@ -538,11 +515,12 @@ const MindMapContent: React.FC<MindMapPanelProps> = ({ isReadOnly = false }) => 
         moveSelection(event.key);
         break;
     }
-  }, [isReadOnly, isRenameModalOpen, addChildNode, addSiblingNode, deleteSelectedNodes, moveSelection, getSelectedNode, undo, redo]);
+  }, [isReadOnly, addChildNode, addSiblingNode, deleteSelectedNodes, moveSelection, getSelectedNode, undo, redo, setNodes]);
 
   return (
     <div
-      style={{ width: '100%', height: '100%', background: '#fff', position: 'relative' }}
+      ref={mindMapContainerRef} // 2. Provide ref to container div
+      style={{ width: '100%', height: '100%', background: '#fff', position: 'relative', outline: 'none' }}
       onKeyDown={onKeyDown}
       tabIndex={0}
       className='mindmap-container' // Identifier for tests
@@ -550,7 +528,15 @@ const MindMapContent: React.FC<MindMapPanelProps> = ({ isReadOnly = false }) => 
       <ReactFlow
         nodes={nodes}
         edges={edges}
-        onNodesChange={onNodesChange}
+        onNodesChange={(changes) => {
+          onNodesChange(changes as NodeChange<CustomNode>[]);
+          // If a node is deselected, ensure the container gets focus back
+          if (changes.some(c => c.type === 'select' && !c.selected)) {
+            if (mindMapContainerRef.current) {
+              mindMapContainerRef.current.focus();
+            }
+          }
+        }}
         onEdgesChange={onEdgesChange}
         onConnect={onConnectStore}
         onNodeDoubleClick={onNodeDoubleClickInternal}
@@ -615,25 +601,6 @@ const MindMapContent: React.FC<MindMapPanelProps> = ({ isReadOnly = false }) => 
         )}
       </ReactFlow>
 
-      <Modal
-        title="トピック名の編集"
-        open={isRenameModalOpen}
-        onOk={handleRenameSave}
-        onCancel={() => {
-          setIsRenameModalOpen(false);
-          setIsCreatingNode(false);
-        }}
-        okText="保存"
-        cancelText="キャンセル"
-      >
-        <Input
-          ref={inputRef}
-          value={editingLabel}
-          onChange={(e) => setEditingLabel(e.target.value)}
-          onPressEnter={handleRenameSave}
-          autoFocus
-        />
-      </Modal>
     </div>
   );
 };

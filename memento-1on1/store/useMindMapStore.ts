@@ -12,6 +12,9 @@ export interface MindMapNodeData extends Record<string, unknown> {
     expanded?: boolean;
     hasChildren?: boolean;
     onToggle?: (id: string) => void;
+    isEditing?: boolean;
+    onLabelChange?: (id: string, newLabel: string, intent?: 'TAB' | 'ENTER') => void;
+    onEditBlur?: (id: string) => void;
 }
 
 export type CustomNode = Node<MindMapNodeData>;
