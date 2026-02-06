@@ -10,7 +10,8 @@ ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
 ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
 ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
 ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
-ENV NODE_ENV=production
+# NODE_ENV will be set to production only in the runner stage or explicitly for build command if needed
+# ENV NODE_ENV=production <-- REMOVED because it causes npm ci to skip devDependencies (typescript)
 
 # Set working directory
 WORKDIR /app
