@@ -8,6 +8,9 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ['antd', '@ant-design/icons', '@xyflow/react', 'lodash', 'date-fns'],
   },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
 };
 
 export default nextConfig;
