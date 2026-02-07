@@ -28,12 +28,17 @@ export interface Note {
   source?: 'manual' | 'ai' | 'transcript';
 }
 
+export interface Tag {
+  id: string;
+  name: string;
+  color: string;
+}
+
 export interface Subordinate {
   id: string;
   name: string;
-  role: string;
-  department: string;
-  traits: string[];
+  traits: string[]; // Deprecated, keeping for backward compatibility
+  tags?: Tag[]; // New Tag system
   lastOneOnOne?: string;
   created_at?: string;
 }
@@ -92,8 +97,20 @@ export const useStore = create<AppState>((set, get) => ({
       const client = createClientComponentClient();
       set({ isLoading: true });
       const { userId } = get();
-      let query = client.from('subordinates').select('*');
-      
+
+      // Fetch Subordinates with their tags
+      // Note: Supabase JS join syntax
+      let query = client.from('subordinates').select(`
+        *,
+        subordinate_tags (
+          tags (
+            id,
+            name,
+            color
+          )
+        )
+      `);
+
       // Filter by user_id if userId is set
       if (userId) {
         query = query.eq('user_id', userId);
@@ -101,9 +118,9 @@ export const useStore = create<AppState>((set, get) => ({
       } else {
         console.log('fetchSubordinates: no userId, fetching all subordinates');
       }
-      
+
       const { data, error } = await query.order('created_at', { ascending: false });
-      
+
       if (error) {
         console.error('fetchSubordinates error:', error.message);
         console.error('fetchSubordinates error details:', error);
@@ -114,7 +131,9 @@ export const useStore = create<AppState>((set, get) => ({
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const mappedData = data.map((item: any) => ({
           ...item,
-          traits: typeof item.traits === 'string' ? JSON.parse(item.traits) : item.traits
+          traits: typeof item.traits === 'string' ? JSON.parse(item.traits) : item.traits,
+          // Map nested join result to flat tags array
+          tags: item.subordinate_tags?.map((st: any) => st.tags) || []
         }));
         set({ subordinates: mappedData, isLoading: false });
       }
@@ -167,13 +186,16 @@ export const useStore = create<AppState>((set, get) => ({
       const client = createClientComponentClient();
       set({ isLoading: true });
       const { userId } = get();
-      
+
+      // Fetch user's organization_id
+      // REVERTED: User requested normalized approach.
+      // const { data: profile } = await client...
+
       const subordinateData = {
         name: sub.name,
-        role: sub.role,
-        department: sub.department,
         traits: sub.traits,
         user_id: userId,
+        // organization_id: organizationId // REVERTED
       };
 
       const { data, error } = await client
@@ -187,17 +209,19 @@ export const useStore = create<AppState>((set, get) => ({
         set({ error: error.message, isLoading: false });
       } else {
         console.log('Subordinate added:', data);
-        const newSubordinate = {
-          id: data.id,
-          name: data.name,
-          role: data.role,
-          department: data.department,
-          traits: data.traits,
-        };
-        set((state) => ({ 
-          subordinates: [newSubordinate, ...state.subordinates],
-          isLoading: false 
-        }));
+
+        // Handle Tags insertion
+        if (sub.tags && sub.tags.length > 0) {
+          const tagInserts = sub.tags.map(t => ({
+            subordinate_id: data.id,
+            tag_id: t.id
+          }));
+          const { error: tagError } = await client.from('subordinate_tags').insert(tagInserts);
+          if (tagError) console.error('Error adding tags:', tagError);
+        }
+
+        // Re-fetch to get complete data with tags
+        await get().fetchSubordinates();
       }
     } catch (err) {
       console.error('addSubordinate: failed to create client:', err);
@@ -209,7 +233,7 @@ export const useStore = create<AppState>((set, get) => ({
     try {
       const client = createClientComponentClient();
       set({ isLoading: true });
-      
+
       const { data, error } = await client.from('sessions').insert([{
         subordinate_id: session.subordinateId,
         date: session.date,
@@ -227,19 +251,19 @@ export const useStore = create<AppState>((set, get) => ({
       } else if (data) {
         const newSession = {
           ...data[0],
-        subordinateId: data[0].subordinate_id,
-        mindMapData: data[0].mind_map_data
-      };
-      set((state) => ({ 
-        sessions: [newSession, ...state.sessions],
-        isLoading: false 
-      }));
-      
+          subordinateId: data[0].subordinate_id,
+          mindMapData: data[0].mind_map_data
+        };
+        set((state) => ({
+          sessions: [newSession, ...state.sessions],
+          isLoading: false
+        }));
 
-      
-      return newSession.id;
-    }
-    return null;
+
+
+        return newSession.id;
+      }
+      return null;
     } catch (err) {
       console.error('addSession: failed to create client:', err);
       set({ isLoading: false });
@@ -258,8 +282,6 @@ export const useStore = create<AppState>((set, get) => ({
       // DB map
       const dbUpdates: Record<string, unknown> = {};
       if (updates.name) dbUpdates.name = updates.name;
-      if (updates.role) dbUpdates.role = updates.role;
-      if (updates.department) dbUpdates.department = updates.department;
       if (updates.traits) dbUpdates.traits = updates.traits;
       if (updates.lastOneOnOne) dbUpdates.last_one_on_one = updates.lastOneOnOne;
 
@@ -314,7 +336,7 @@ export const useStore = create<AppState>((set, get) => ({
         .eq('id', id)
         .select()
         .single();
-      
+
       if (error) {
         console.error("Failed to sync session update", {
           errorMessage: error?.message,

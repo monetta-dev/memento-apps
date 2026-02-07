@@ -18,6 +18,42 @@ export default function CRMPage() {
   const [form] = Form.useForm();
   const [uploading, setUploading] = useState(false);
 
+  // Tag State
+  const [availableTags, setAvailableTags] = useState<{ label: string, value: string, color: string }[]>([]);
+
+  useEffect(() => {
+    const fetchTags = async () => {
+      const supabase = createClientComponentClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      // Debug: Check Profile Org ID
+      const { data: profile } = await supabase.from('profiles').select('organization_id').eq('id', session.user.id).single();
+      console.log('CRM: Current User Org ID:', profile?.organization_id);
+
+      if (!profile?.organization_id) {
+        console.warn('CRM: User has no organization_id, cannot fetch tags.');
+        setAvailableTags([]);
+        return;
+      }
+
+      const { data: tags, error } = await supabase
+        .from('tags')
+        .select('*')
+        .eq('organization_id', profile.organization_id); // Explicitly filter by Org ID just in case
+
+      if (error) {
+        console.error('CRM: Error fetching tags:', error);
+      }
+
+      if (tags) {
+        console.log('CRM: Fetched tags:', tags);
+        setAvailableTags(tags.map(t => ({ label: t.name, value: t.id, color: t.color })));
+      }
+    };
+    fetchTags();
+  }, [isModalVisible]); // Refresh when modal opens
+
   useEffect(() => {
     const checkAuthAndFetch = async () => {
       const supabase = createClientComponentClient();
@@ -42,10 +78,8 @@ export default function CRMPage() {
     form.validateFields().then(async (values) => {
       await addSubordinate({
         name: values.name,
-        role: values.role,
-        department: values.department,
-        traits: ['New'], // Placeholder for parsed traits
-        lastOneOnOne: undefined,
+        traits: ['New'], // Legacy
+        tags: values.tagIds?.map((id: string) => ({ id })) // partial tag object just for ID passing
       });
       setIsModalVisible(false);
       form.resetFields();
@@ -96,15 +130,18 @@ export default function CRMPage() {
 
   const columns = [
     { title: '名前', dataIndex: 'name', key: 'name', render: (text: string, record: Subordinate) => <a onClick={() => showDetail(record)}>{text}</a> },
-    { title: '役職', dataIndex: 'role', key: 'role' },
-    { title: '部署', dataIndex: 'department', key: 'department' },
     {
-      title: '特性',
-      dataIndex: 'traits',
-      key: 'traits',
-      render: (traits: string[]) => (
+      title: '特性 / タグ',
+      dataIndex: 'tags',
+      key: 'tags',
+      render: (tags: { name: string, color: string }[] | undefined, record: Subordinate) => (
         <>
-          {traits.map(tag => <Tag color="blue" key={tag}>{tag}</Tag>)}
+          {/* Show new Tags */}
+          {tags?.map(tag => (
+            <Tag color={tag.color || 'blue'} key={tag.name}>{tag.name}</Tag>
+          ))}
+          {/* Fallback to legacy traits if any */}
+          {(!tags || tags.length === 0) && record.traits?.map(t => <Tag key={t}>{t}</Tag>)}
         </>
       )
     },
@@ -133,16 +170,15 @@ export default function CRMPage() {
           <Form.Item name="name" label="名前" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="department" label="部署" rules={[{ required: true }]}>
-            <Select>
-              <Option value="Development">開発</Option>
-              <Option value="Sales">営業</Option>
-              <Option value="Marketing">マーケティング</Option>
-              <Option value="Design">デザイン</Option>
+          {/* 部署・役職はタグ管理に移行するため削除 */}
+          <Form.Item name="tagIds" label="タグ">
+            <Select mode="multiple" placeholder="タグを選択">
+              {availableTags.map(tag => (
+                <Option key={tag.value} value={tag.value}>
+                  <Tag color={tag.color}>{tag.label}</Tag>
+                </Option>
+              ))}
             </Select>
-          </Form.Item>
-          <Form.Item name="role" label="役職" rules={[{ required: true }]}>
-            <Input />
           </Form.Item>
           <Form.Item label="特性分析 (PDFアップロード)">
             <Upload>
@@ -166,8 +202,6 @@ export default function CRMPage() {
         {selectedSub && (
           <Descriptions title="ユーザー情報" bordered column={1} layout="vertical">
             <Descriptions.Item label="名前">{selectedSub.name}</Descriptions.Item>
-            <Descriptions.Item label="部署">{selectedSub.department}</Descriptions.Item>
-            <Descriptions.Item label="役職">{selectedSub.role}</Descriptions.Item>
             <Descriptions.Item label="検出された特性">
               {selectedSub.traits.length > 0 ? selectedSub.traits.map(t => <Tag key={t}>{t}</Tag>) : "まだ特性が分析されていません。"}
             </Descriptions.Item>

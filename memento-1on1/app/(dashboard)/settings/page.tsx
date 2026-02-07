@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Typography, Card, Switch, Avatar, Button, message, Spin, Tag, Select } from 'antd';
+import { Typography, Card, Switch, Avatar, Button, message, Spin, Tag, Select, Input } from 'antd';
 import { CalendarOutlined, MessageOutlined, LinkOutlined, DisconnectOutlined, GoogleOutlined } from '@ant-design/icons';
 import { createClientComponentClient, getOAuthRedirectUrl } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
@@ -340,6 +340,71 @@ export default function SettingsPage() {
     }
   };
 
+  // Organization handling
+  const [orgCode, setOrgCode] = useState('');
+  const [joiningOrg, setJoiningOrg] = useState(false);
+  const [currentOrg, setCurrentOrg] = useState<{ id: string; name: string } | null>(null);
+
+  useEffect(() => {
+    const fetchOrg = async () => {
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) return;
+
+      const { data: profile } = await supabase.from('profiles').select('organization_id, organizations(name, code)').eq('id', user.id).single();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if (profile?.organizations) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const org = profile.organizations as any;
+        setCurrentOrg({ id: profile.organization_id, name: org.name });
+      }
+    };
+    fetchOrg();
+  }, [supabase]);
+
+  const handleJoinOrg = async () => {
+    if (!orgCode) return;
+    setJoiningOrg(true);
+    try {
+      // 1. Find Org by Code
+      const { data: org, error: orgError } = await supabase.from('organizations').select('id, name').eq('code', orgCode).single();
+      if (orgError || !org) {
+        message.error('組織が見つかりませんでした。コードを確認してください。');
+        return;
+      }
+
+      // 2. Update Profile
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) return;
+
+      const { error: updateError } = await supabase.from('profiles').update({ organization_id: org.id }).eq('id', user.id);
+      if (updateError) throw updateError;
+
+      setCurrentOrg({ id: org.id, name: org.name });
+      message.success(`${org.name}に参加しました！`);
+      setOrgCode('');
+    } catch (err) {
+      console.error(err);
+      message.error('参加に失敗しました。');
+    } finally {
+      setJoiningOrg(false);
+    }
+  };
+
+  // Define integrations is inside render or needs to be moved if used here. 
+  // Wait, `integrations` array was defined inside the component scope in original file.
+  // I need to be careful with where I insert this.
+  // The ReplacementContent replaces lines 320-341 (handleLineDisconnect).
+  // This is fine, I am appending the new Orgnization logic after it.
+  // But wait, `integrations` array is defined at line 344 in original file.
+  // So I am inserting logic BEFORE `integrations` definition.
+  // The UI rendering part needs to be updated too.
+  // I should use a MULTI-REPLACE or just replace the JSX part separately.
+  // Let's replace `handleLineDisconnect` AND insert the state/effects.
+  // But I also need to update the JSX to show the Organization card.
+
+  // Let's do state/logic insertion first.
+
+
 
   const integrations = [
     {
@@ -384,6 +449,35 @@ export default function SettingsPage() {
   return (
     <div>
       <Title level={2} style={{ margin: 0 }}>設定</Title>
+
+      <Card title="組織設定" variant="borderless" className="wafu-card" style={{ marginBottom: 24 }}>
+        {currentOrg ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontSize: '0.9rem', color: '#666' }}>現在の所属</div>
+              <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#223a70' }}>{currentOrg.name}</div>
+            </div>
+            <Tag color="blue">参加済み</Tag>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ marginBottom: 8, fontWeight: 600 }}>組織コードを入力して参加</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Input
+                  placeholder="例: MEMENTO-2024"
+                  value={orgCode}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setOrgCode(e.target.value)}
+                  style={{ maxWidth: 300 }}
+                />
+                <Button type="primary" onClick={handleJoinOrg} loading={joiningOrg} disabled={!orgCode}>
+                  参加する
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </Card>
 
       <Card title="連携" variant="borderless" className="wafu-card">
         <div className="ant-list ant-list-split">
