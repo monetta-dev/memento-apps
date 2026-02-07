@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Typography, Card, Button, Table, Tag, Modal, Form, Select, Input, Radio, DatePicker } from 'antd';
-import { PlusOutlined, VideoCameraOutlined, UserOutlined } from '@ant-design/icons';
+import { Typography, Card, Button, Table, Tag, Modal, Form, Select, Input, Radio, DatePicker, Popconfirm } from 'antd';
+import { PlusOutlined, VideoCameraOutlined, UserOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useStore, Session } from '@/store/useStore';
 import { createClientComponentClient } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
@@ -14,7 +14,7 @@ const { Option } = Select;
 
 export default function Dashboard() {
   const router = useRouter();
-  const { subordinates, sessions, addSession, fetchSubordinates, fetchSessions, setUserId } = useStore();
+  const { subordinates, sessions, addSession, fetchSubordinates, fetchSessions, deleteSession, setUserId } = useStore();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [selectedTheme, setSelectedTheme] = useState<string>('');
   const [form] = Form.useForm();
@@ -149,6 +149,31 @@ export default function Dashboard() {
       onFilter: (value: any, record: Session) => record.status === value, // eslint-disable-line @typescript-eslint/no-explicit-any
       render: (status: string) => (
         <Tag color={status === 'completed' ? 'default' : 'processing'}>{status.toUpperCase()}</Tag>
+      ),
+    },
+    {
+      title: '操作',
+      key: 'action',
+      render: (_: unknown, record: Session) => (
+        <Popconfirm
+          title="セッションを削除しますか？"
+          description="この操作は取り消せません。"
+          onConfirm={(e) => {
+            e?.stopPropagation(); // Prevent row click
+            deleteSession(record.id);
+          }}
+          onCancel={(e) => e?.stopPropagation()}
+          okText="削除"
+          cancelText="キャンセル"
+          okButtonProps={{ danger: true }}
+        >
+          <Button
+            type="text"
+            danger
+            icon={<DeleteOutlined />}
+            onClick={(e) => e.stopPropagation()} // Prevent row click
+          />
+        </Popconfirm>
       ),
     },
   ];

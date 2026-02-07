@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Typography, Card, Button, Table, Modal, Form, Input, Select, Upload, App, Tag, Drawer, Descriptions, Spin } from 'antd';
-import { PlusOutlined, UploadOutlined, FilePdfOutlined } from '@ant-design/icons';
+import { Typography, Card, Button, Table, Modal, Form, Input, Select, Upload, App, Tag, Drawer, Descriptions, Spin, Popconfirm } from 'antd';
+import { PlusOutlined, UploadOutlined, FilePdfOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useStore, Subordinate } from '@/store/useStore';
 import { createClientComponentClient } from '@/lib/supabase';
 
@@ -10,7 +10,7 @@ const { Title } = Typography;
 const { Option } = Select;
 
 export default function CRMPage() {
-  const { subordinates, addSubordinate, fetchSubordinates, updateSubordinate, setUserId } = useStore();
+  const { subordinates, addSubordinate, fetchSubordinates, updateSubordinate, deleteSubordinate, setUserId } = useStore();
   const { message } = App.useApp();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -144,6 +144,23 @@ export default function CRMPage() {
           {(!tags || tags.length === 0) && record.traits?.map(t => <Tag key={t}>{t}</Tag>)}
         </>
       )
+
+    },
+    {
+      title: '操作',
+      key: 'action',
+      render: (_: unknown, record: Subordinate) => (
+        <Popconfirm
+          title="部下を削除しますか？"
+          description="関連するすべてのセッション履歴も削除されます。この操作は取り消せません。"
+          onConfirm={() => deleteSubordinate(record.id).then(() => message.success('削除しました'))}
+          okText="削除"
+          cancelText="キャンセル"
+          okButtonProps={{ danger: true }}
+        >
+          <Button type="text" danger icon={<DeleteOutlined />} />
+        </Popconfirm>
+      ),
     },
   ];
 

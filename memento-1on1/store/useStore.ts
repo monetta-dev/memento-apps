@@ -78,8 +78,10 @@ interface AppState {
   fetchSessions: () => Promise<void>;
   addSubordinate: (sub: Omit<Subordinate, 'id' | 'created_at'>) => Promise<void>;
   updateSubordinate: (id: string, updates: Partial<Subordinate>) => Promise<void>;
+  deleteSubordinate: (id: string) => Promise<void>;
   addSession: (session: Omit<Session, 'id' | 'created_at' | 'status'>, userId?: string) => Promise<string | null>;
   updateSession: (id: string, updates: Partial<Session>) => Promise<void>;
+  deleteSession: (id: string) => Promise<void>;
   getSession: (id: string) => Session | undefined;
 }
 
@@ -354,6 +356,52 @@ export const useStore = create<AppState>((set, get) => ({
       }
     } catch (err) {
       console.error('Unexpected error updating session:', err);
+    }
+  },
+
+  deleteSubordinate: async (id) => {
+    try {
+      const client = createClientComponentClient();
+      set({ isLoading: true });
+
+      const { error } = await client.from('subordinates').delete().eq('id', id);
+
+      if (error) {
+        console.error('Error deleting subordinate:', error);
+        set({ error: error.message, isLoading: false });
+      } else {
+        set((state) => ({
+          subordinates: state.subordinates.filter((s) => s.id !== id),
+          // Also remove sessions related to this subordinate from local state (cascade happens in DB)
+          sessions: state.sessions.filter((s) => s.subordinateId !== id),
+          isLoading: false
+        }));
+      }
+    } catch (err) {
+      console.error('deleteSubordinate: failed to create client:', err);
+      set({ isLoading: false });
+    }
+  },
+
+  deleteSession: async (id) => {
+    try {
+      const client = createClientComponentClient();
+      set({ isLoading: true });
+
+      const { error } = await client.from('sessions').delete().eq('id', id);
+
+      if (error) {
+        console.error('Error deleting session:', error);
+        set({ error: error.message, isLoading: false });
+      } else {
+        set((state) => ({
+          sessions: state.sessions.filter((s) => s.id !== id),
+          isLoading: false
+        }));
+      }
+    } catch (err) {
+      console.error('deleteSession: failed to create client:', err);
+      set({ isLoading: false });
     }
   },
 
