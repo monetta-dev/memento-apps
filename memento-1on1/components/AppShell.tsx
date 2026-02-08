@@ -100,23 +100,10 @@ const AppShell = ({ children }: { children: React.ReactNode }) => {
       style: { color: 'rgba(0, 0, 0, 0.88)', cursor: 'default' }
     },
     {
-      key: 'auth_type',
-      label: isGoogleAuth ? 'Googleでログイン中' : 'メールアドレスでログイン中',
-      icon: isGoogleAuth ? <GoogleOutlined /> : <UserOutlined />,
-      disabled: true,
-      style: { color: 'rgba(0, 0, 0, 0.45)', cursor: 'default' }
-    },
-    { type: 'divider' },
-    {
-      key: 'settings_link',
-      label: '設定',
-      icon: <SettingOutlined />,
-      onClick: () => router.push('/settings')
-    },
-    {
       key: 'logout',
       label: 'ログアウト',
       icon: <LogoutOutlined />,
+      danger: true,
       onClick: handleLogout
     }
   ];
@@ -160,7 +147,7 @@ const AppShell = ({ children }: { children: React.ReactNode }) => {
             <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" arrow>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '4px 8px', borderRadius: '6px', transition: 'all 0.2s' }} className="hover:bg-gray-100">
                 <span style={{ fontWeight: 500 }}>
-                  {loading ? '読み込み中...' : (user?.email?.split('@')[0] || 'ユーザー')}
+                  {loading ? '読み込み中...' : (user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'ユーザー')}
                 </span>
                 <Avatar src={user?.user_metadata?.avatar_url} icon={!user?.user_metadata?.avatar_url && <UserOutlined />} />
               </div>
