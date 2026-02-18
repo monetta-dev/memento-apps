@@ -11,6 +11,8 @@ import { THEME_OPTIONS, OTHER_THEME_VALUE } from '@/lib/constants';
 
 const { Title } = Typography;
 const { Option } = Select;
+import { Alert } from 'antd';
+
 
 export default function Dashboard() {
   const router = useRouter();
@@ -178,9 +180,26 @@ export default function Dashboard() {
     },
   ];
 
+  const activeSession = sessions.find(s => s.status === 'live');
+
   return (
     <div>
+      {activeSession && (
+        <Alert
+          message="進行中の1on1セッションがあります"
+          description={`部下: ${subordinates.find(s => s.id === activeSession.subordinateId)?.name || 'Unknown'} / テーマ: ${activeSession.theme}`}
+          type="info"
+          showIcon
+          action={
+            <Button size="small" type="primary" onClick={() => router.push(`/session/${activeSession.id}`)}>
+              再開する
+            </Button>
+          }
+          style={{ marginBottom: 24 }}
+        />
+      )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+
         <Title level={2} style={{ margin: 0 }}>ダッシュボード</Title>
         <Button type="primary" size="large" icon={<PlusOutlined />} onClick={handleStart}>
           1on1を開始
