@@ -12,8 +12,24 @@ export async function POST(request: Request) {
         }
 
         // 1. Authenticate the user
-        // We use the standard route handler client to get the verified user from the session
-        const supabaseUser = createRouteHandlerClient({ cookies });
+        // Next.js 15+ cookies() is async
+        const cookieStore = await cookies();
+
+        // Create adapter for lib/supabase.ts which expects { getAll, setAll }
+        const supabaseUser = createRouteHandlerClient({
+            getAll: () => cookieStore.getAll(),
+            setAll: (cookiesToSet) => {
+                try {
+                    cookiesToSet.forEach(({ name, value, options }) => {
+                        cookieStore.set(name, value, options);
+                    });
+                } catch (error) {
+                    // Ignore cookie setting errors (e.g. if called after response started)
+                    console.error('Error setting cookies:', error);
+                }
+            }
+        });
+
         const { data: { user }, error: authError } = await supabaseUser.auth.getUser();
 
         if (authError || !user) {
