@@ -15,7 +15,8 @@ import SessionHeader from '@/components/session/SessionHeader';
 import FaceToFaceDashboard from '@/components/session/FaceToFaceDashboard';
 import ControlsBar from '@/components/session/ControlsBar';
 import AdvicePanel from '@/components/session/AdvicePanel';
-import TranscriptPanel from '@/components/session/TranscriptPanel';
+// TranscriptPanel removed
+
 
 import dynamic from 'next/dynamic';
 
@@ -63,6 +64,8 @@ export default function SessionPage() {
   // Session State
   const [messages, setMessages] = useState<{ speaker: string, text: string, time: string }[]>([]);
   const [realTimeAdvice, setRealTimeAdvice] = useState<string>('会話を待っています...');
+  const [adviceHistory, setAdviceHistory] = useState<string[]>([]);
+
   const [isMindMapMode, setIsMindMapMode] = useState(false);
   // Face-to-Face mode state
   const [notes, setNotes] = useState<Note[]>([]);
@@ -77,7 +80,8 @@ export default function SessionPage() {
   const lastAdviceTimeRef = useRef<number>(0);
   const [remoteAudioStream, setRemoteAudioStream] = useState<MediaStream | null>(null);
   const prevRemoteStreamRef = useRef<MediaStream | null>(null);
-  const logEndRef = useRef<HTMLDivElement | null>(null);
+  // logEndRef removed
+
   const agendaSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const notesSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -240,6 +244,8 @@ export default function SessionPage() {
         if (data.advice) {
           lastAdviceTimeRef.current = Date.now();
           setRealTimeAdvice(data.advice);
+          setAdviceHistory(prev => [...prev, data.advice]);
+
           api.info({
             message: 'AI Coach Advice',
             description: data.advice,
@@ -253,6 +259,8 @@ export default function SessionPage() {
         // Fallback to mock advice
         const mockAdvice = MOCK_ADVICES[Math.floor(Math.random() * MOCK_ADVICES.length)];
         setRealTimeAdvice(mockAdvice);
+        setAdviceHistory(prev => [...prev, mockAdvice]);
+
         api.info({
           message: 'AI Coach Advice',
           description: mockAdvice,
@@ -271,9 +279,8 @@ export default function SessionPage() {
     }
   }, [messages, sessionData, subordinate]);
 
-  useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  // Scroll effect removed
+
 
   // MindMap state - using global store for zundo support
   const mindMapNodes = useMindMapStore(state => state.nodes);
@@ -681,50 +688,15 @@ export default function SessionPage() {
             overflow: 'hidden',
             height: '100%'
           }}>
-            <Card
-              title={
-                <span>
-                  <BulbOutlined style={{ color: '#faad14' }} /> AI Copilot
-                </span>
-              }
-              size="small"
-              variant="outlined"
-              style={{
-                width: '100%',
-                height: '100%',
-                display: 'flex',
-                flexDirection: 'column'
-              }}
-              styles={{
-                body: {
-                  flex: 1,
-                  minHeight: 0,
-                  padding: '16px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  overflow: 'hidden'
-                }
-              }}
-            >
-              <Row style={{
-                flex: 1,
-                flexDirection: 'column',
-                minHeight: 0,
-                height: '100%',
-                overflow: 'hidden'
-              }}>
-                <Col style={{ flexShrink: 0, marginBottom: 16 }}>
-                  <AdvicePanel realTimeAdvice={realTimeAdvice} />
-                </Col>
-                <Col style={{
-                  flex: 1,
-                  minHeight: 0,
-                  overflow: 'hidden'
-                }}>
-                  <TranscriptPanel messages={messages} logEndRef={logEndRef} />
-                </Col>
-              </Row>
-            </Card>
+            <div style={{
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              padding: '16px'
+            }}>
+              <AdvicePanel realTimeAdvice={realTimeAdvice} adviceHistory={adviceHistory} />
+            </div>
           </Sider>
         )}
       </Layout>
