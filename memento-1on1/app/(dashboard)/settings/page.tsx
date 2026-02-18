@@ -365,26 +365,24 @@ export default function SettingsPage() {
     if (!orgCode) return;
     setJoiningOrg(true);
     try {
-      // 1. Find Org by Code
-      const { data: org, error: orgError } = await supabase.from('organizations').select('id, name').eq('code', orgCode).single();
-      if (orgError || !org) {
-        message.error('組織が見つかりませんでした。コードを確認してください。');
-        return;
+      const response = await fetch('/api/organizations/join', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: orgCode })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to join organization');
       }
 
-      // 2. Update Profile
-      const user = (await supabase.auth.getUser()).data.user;
-      if (!user) return;
-
-      const { error: updateError } = await supabase.from('profiles').update({ organization_id: org.id }).eq('id', user.id);
-      if (updateError) throw updateError;
-
-      setCurrentOrg({ id: org.id, name: org.name });
-      message.success(`${org.name}に参加しました！`);
+      setCurrentOrg({ id: data.organization.id, name: data.organization.name });
+      message.success(`${data.organization.name}に参加しました！`);
       setOrgCode('');
     } catch (err) {
       console.error(err);
-      message.error('参加に失敗しました。');
+      message.error(err instanceof Error ? err.message : '参加に失敗しました。');
     } finally {
       setJoiningOrg(false);
     }
