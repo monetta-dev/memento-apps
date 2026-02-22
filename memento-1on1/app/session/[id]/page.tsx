@@ -245,14 +245,6 @@ export default function SessionPage() {
           lastAdviceTimeRef.current = Date.now();
           setRealTimeAdvice(data.advice);
           setAdviceHistory(prev => [...prev, data.advice]);
-
-          api.info({
-            message: 'AI Coach Advice',
-            description: data.advice,
-            placement: 'topRight',
-            icon: <BulbOutlined style={{ color: '#1890ff' }} />,
-            duration: 6,
-          });
         }
       } catch (error) {
         console.error('Failed to fetch AI advice:', error);
@@ -260,14 +252,6 @@ export default function SessionPage() {
         const mockAdvice = MOCK_ADVICES[Math.floor(Math.random() * MOCK_ADVICES.length)];
         setRealTimeAdvice(mockAdvice);
         setAdviceHistory(prev => [...prev, mockAdvice]);
-
-        api.info({
-          message: 'AI Coach Advice',
-          description: mockAdvice,
-          placement: 'topRight',
-          icon: <BulbOutlined style={{ color: '#1890ff' }} />,
-          duration: 4,
-        });
       } finally {
         isAnalyzingRef.current = false;
       }

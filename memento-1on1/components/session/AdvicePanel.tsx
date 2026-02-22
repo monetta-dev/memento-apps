@@ -12,7 +12,7 @@ interface AdvicePanelProps {
 const AdvicePanel: React.FC<AdvicePanelProps> = ({ realTimeAdvice, isLarge = false }) => {
   const headerFontSize = isLarge ? '20px' : '14px';
   const iconSize = isLarge ? '24px' : '14px';
-  const adviceFontSize = isLarge ? '28px' : '16px';
+  const adviceFontSize = isLarge ? '36px' : '18px';
   const avatarSize = isLarge ? '120px' : '60px';
 
   const hasAdvice = realTimeAdvice && realTimeAdvice.trim().length > 0;
