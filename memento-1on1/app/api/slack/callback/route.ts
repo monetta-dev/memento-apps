@@ -82,23 +82,27 @@ export async function GET(req: NextRequest) {
         return NextResponse.redirect(`${siteUrl}/settings?slack=error&reason=no_webhook`);
     }
 
-    console.log(`[DEBUG] Slack callback started for user: ${userId}`);
+    console.log(`[DEBUG] Slack callback started for user: [${userId}]`);
+    console.log(`[DEBUG] SUPABASE_URL: ${process.env.NEXT_PUBLIC_SUPABASE_URL?.substring(0, 20)}...`);
 
     // Service Role クライアントでDBに保存
     const supabase = createServiceRoleClient();
 
-    // 手動 upsert: まず存在確認
-    const { data: existing, error: selectError } = await supabase
+    // 手動 upsert: 極限までシンプルに。maybeSingle () を止めて limit(1) にする
+    const { data: rows, error: selectError } = await supabase
         .from('messaging_integrations')
-        .select('id')
+        .select('*')
         .eq('user_id', userId)
         .eq('provider', 'slack')
-        .maybeSingle();
+        .limit(1);
 
     if (selectError) {
-        console.error('[DEBUG] Slack select error:', selectError);
-        return NextResponse.redirect(`${siteUrl}/settings?slack=error&reason=db_error_select_${selectError.code || 'unknown'}`);
+        console.error('[DEBUG] Slack select error details:', JSON.stringify(selectError));
+        const errInfo = encodeURIComponent(`${selectError.code || 'no_code'}_${selectError.message?.substring(0, 50) || 'no_msg'}`);
+        return NextResponse.redirect(`${siteUrl}/settings?slack=error&reason=db_error_select_${errInfo}`);
     }
+
+    const existing = rows && rows.length > 0 ? rows[0] : null;
 
     const payload = {
         user_id: userId,
@@ -112,13 +116,14 @@ export async function GET(req: NextRequest) {
             team_name: teamName,
             channel_name: channelName,
             access_token: tokenData.access_token,
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
+            debug_v: '3'
         },
     };
 
     let result;
     if (existing) {
-        console.log('[DEBUG] Updating existing Slack integration:', existing.id);
+        console.log('[DEBUG] Updating existing Slack integration ID:', existing.id);
         result = await supabase
             .from('messaging_integrations')
             .update(payload)
@@ -132,11 +137,12 @@ export async function GET(req: NextRequest) {
 
     if (result.error) {
         const method = existing ? 'update' : 'insert';
-        console.error(`[DEBUG] Slack ${method} error:`, result.error);
-        return NextResponse.redirect(`${siteUrl}/settings?slack=error&reason=db_error_${method}_${result.error.code || 'unknown'}`);
+        console.error(`[DEBUG] Slack ${method} error details:`, JSON.stringify(result.error));
+        const errInfo = encodeURIComponent(`${result.error.code || 'no_code'}_${result.error.message?.substring(0, 50) || 'no_msg'}`);
+        return NextResponse.redirect(`${siteUrl}/settings?slack=error&reason=db_error_${method}_${errInfo}`);
     }
 
     return NextResponse.redirect(
-        `${siteUrl}/settings?slack=connected&channel=${encodeURIComponent(channelName ?? '')}&v=2`
+        `${siteUrl}/settings?slack=connected&channel=${encodeURIComponent(channelName ?? '')}&v=3`
     );
 }
