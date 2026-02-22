@@ -626,19 +626,19 @@ export default function SessionPage() {
               </div>
             )}
 
-            {/* Face-to-face mode: Dashboard */}
+            {/* Face-to-face mode: Jizo Big Advice Panel */}
             {sessionData.mode === 'face-to-face' && !isMindMapMode && (
               <div style={{
                 width: '100%',
                 height: '100%',
                 position: 'relative',
+                padding: '24px',
+                background: '#f0f2f5'
               }}>
-                <FaceToFaceDashboard
-                  notes={notes}
-                  onAddNote={handleAddNote}
-                  isAiQuestionMode={isAiQuestionMode}
-                  onToggleMode={handleToggleMode}
-                  onAskAI={handleAskAI}
+                <AdvicePanel
+                  realTimeAdvice={realTimeAdvice}
+                  adviceHistory={adviceHistory}
+                  isLarge={true}
                 />
               </div>
             )}
@@ -679,8 +679,8 @@ export default function SessionPage() {
           />
         </Content>
 
-        {/* Right Side: AI Copilot & Transcript - hidden in mindmap mode */}
-        {!isMindMapMode && (
+        {/* Right Side: AI Copilot & Transcript - only for Web mode (hidden in mindmap or face-to-face) */}
+        {!isMindMapMode && sessionData.mode !== 'face-to-face' && (
           <Sider width={400} theme="light" style={{
             borderLeft: '1px solid #f0f0f0',
             display: 'flex',
