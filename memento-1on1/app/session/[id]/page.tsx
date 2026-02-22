@@ -17,6 +17,11 @@ import ControlsBar from '@/components/session/ControlsBar';
 import AdvicePanel from '@/components/session/AdvicePanel';
 // TranscriptPanel removed
 
+// Dev-only mock panel (tree-shaken in production builds)
+const DevTranscriptPanel = process.env.NODE_ENV === 'development'
+  ? require('@/components/session/DevTranscriptPanel').default
+  : null;
+
 
 import dynamic from 'next/dynamic';
 
@@ -691,6 +696,11 @@ export default function SessionPage() {
           </Sider>
         )}
       </Layout>
+
+      {/* Dev-only: mock transcript input panel (not rendered in production) */}
+      {process.env.NODE_ENV === 'development' && DevTranscriptPanel && (
+        <DevTranscriptPanel onTranscript={handleTranscript} />
+      )}
     </Layout>
   );
 }
