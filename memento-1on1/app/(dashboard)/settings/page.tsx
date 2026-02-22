@@ -15,7 +15,7 @@ type LineSettings = {
   is_friend?: boolean;
 };
 
-type BusinessMessagingProvider = 'slack' | 'chatwork';
+type BusinessMessagingProvider = 'slack' | 'chatwork' | 'lineworks';
 
 type BusinessIntegration = {
   provider: BusinessMessagingProvider;
@@ -203,7 +203,25 @@ function SettingsPageContent() {
       message.error(`Chatwork連携に失敗しました (${reason})`);
     }
     const url = new URL(window.location.href);
-    url.searchParams.delete('chatwork'); url.searchParams.delete('rooms'); url.searchParams.delete('reason');
+    url.searchParams.delete('chatwork'); url.searchParams.delete('rooms'); url.searchParams.delete('reason'); url.searchParams.delete('v');
+    window.history.replaceState({}, '', url.toString());
+  }, [searchParams]);
+
+  // LINE Works OAuthコールバック検知
+  useEffect(() => {
+    const lwStatus = searchParams.get('lineworks');
+    if (!lwStatus) return;
+    if (lwStatus === 'connected') {
+      message.success('LINE Works を連携しました');
+      setBusinessIntegrations(prev => ({ ...prev, lineworks: { provider: 'lineworks', enabled: true } }));
+    } else if (lwStatus === 'cancelled') {
+      message.info('LINE Works連携をキャンセルしました');
+    } else if (lwStatus === 'error') {
+      const reason = searchParams.get('reason') || 'unknown';
+      message.error(`LINE Works連携に失敗しました (${reason})`);
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.delete('lineworks'); url.searchParams.delete('reason'); url.searchParams.delete('v');
     window.history.replaceState({}, '', url.toString());
   }, [searchParams]);
 
@@ -550,15 +568,21 @@ function SettingsPageContent() {
     },
     {
       id: 'line',
-      title: 'LINE',
-      description: lineConnected && lineSettings?.is_friend === false
-        ? 'LINE連携済み（友だち追加が必要）'
-        : 'リマインダーや通知をLINEで送信します。',
+      title: 'LINE (個人用 - 廃止予定)',
+      description: (
+        <>
+          <div style={{ marginBottom: 4 }}>
+            {lineConnected && lineSettings?.is_friend === false
+              ? 'LINE連携済み（友だち追加が必要）'
+              : 'リマインダーや通知をLINEで送信します。'}
+          </div>
+          <Tag color="orange" style={{ fontSize: '10px' }}>⚠️ LINE Worksへの移行を推奨しています</Tag>
+        </>
+      ),
       icon: <MessageOutlined style={{ color: '#52c41a' }} />,
       connected: lineConnected,
       loading: lineLoading,
       disabled: false,
-      // is_friend=falseの場合はQRコード表示、それ以外は通常の連携フロー
       onConnect: () => handleLineConnect(false),
       onDisconnect: handleLineDisconnect,
       isGoogleCalendar: false,
@@ -816,6 +840,59 @@ function SettingsPageContent() {
             )}
             {!businessIntegrations.chatwork && chatworkRooms.length === 0 && (
               <div style={{ marginTop: 8, fontSize: '12px', color: '#8c8c8c' }}>ボタンをクリックするとChatworkの認証画面が開きます。認証後に送信先ルームを選ぶだけで完了します。</div>
+            )}
+          </div>
+
+          {/* LINE Works */}
+          <div style={{ marginTop: 20, padding: '16px', background: '#fafafa', borderRadius: '8px', border: '1px solid #f0f0f0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: '20px' }}>🟢</span>
+                <span style={{ fontWeight: 'bold' }}>LINE Works</span>
+                {businessIntegrations.lineworks
+                  ? <Tag color="success">連携済み</Tag>
+                  : <Tag color="default">未連携</Tag>
+                }
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {businessIntegrations.lineworks && (
+                  <Button
+                    size="small"
+                    onClick={async () => {
+                      const { data: { user } } = await supabase.auth.getUser();
+                      if (!user) { message.error('ログインしてください'); return; }
+                      const res = await fetch('/api/messaging/send', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          userId: user.id, provider: 'lineworks',
+                          message: '🧪 これはMemento 1on1からのテストメッセージです。LINE Works連携が正しく機能しています！',
+                        }),
+                      });
+                      if (res.ok) message.success('テストメッセージを送信しました');
+                      else { const d = await res.json(); message.error(`送信失敗: ${d.details || d.error}`); }
+                    }}
+                  >テスト送信</Button>
+                )}
+                <Button
+                  type="primary"
+                  icon={<span style={{ marginRight: 4 }}>🟢</span>}
+                  onClick={() => { window.location.href = '/api/lineworks/authorize'; }}
+                >
+                  {businessIntegrations.lineworks ? 'LINE Worksで再連携' : 'LINE Worksで連携する'}
+                </Button>
+                {businessIntegrations.lineworks && (
+                  <Button danger loading={businessLoading === 'lineworks'} onClick={() => handleBusinessDisconnect('lineworks')}>切断</Button>
+                )}
+              </div>
+            </div>
+            {businessIntegrations.lineworks && (
+              <div style={{ marginTop: 10, fontSize: '13px', color: '#52c41a' }}>
+                ✅ LINE Worksへの送信が有効です。セッション終了時に総括が自動送信されます。
+              </div>
+            )}
+            {!businessIntegrations.lineworks && (
+              <div style={{ marginTop: 8, fontSize: '12px', color: '#8c8c8c' }}>法人の管理者がBotを有効化している必要があります。ボタンをクリックして認証を完了させてください。</div>
             )}
           </div>
         </div>
