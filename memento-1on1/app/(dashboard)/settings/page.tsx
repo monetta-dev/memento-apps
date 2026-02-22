@@ -185,9 +185,15 @@ function SettingsPageContent() {
     if (cwStatus === 'select_room') {
       const roomsParam = searchParams.get('rooms');
       if (roomsParam) {
-        // base64url → base64 変換してからatob（ブラウザ対応）
+        // base64url → base64 変換してからデコード（日本語文字化け対策）
         const base64 = roomsParam.replace(/-/g, '+').replace(/_/g, '/');
-        const rooms = JSON.parse(atob(base64)) as { id: number; name: string }[];
+        const binaryString = atob(base64);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        const decoded = new TextDecoder().decode(bytes);
+        const rooms = JSON.parse(decoded) as { id: number; name: string }[];
         setChatworkRooms(rooms);
       }
     } else if (cwStatus === 'cancelled') {
