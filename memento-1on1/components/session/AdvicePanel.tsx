@@ -1,7 +1,6 @@
 'use client';
 
 import React from 'react';
-import { Alert } from 'antd';
 import { BulbOutlined } from '@ant-design/icons';
 
 interface AdvicePanelProps {
@@ -10,22 +9,13 @@ interface AdvicePanelProps {
   isLarge?: boolean;
 }
 
-const AdvicePanel: React.FC<AdvicePanelProps> = ({ realTimeAdvice, adviceHistory, isLarge = false }) => {
-  const scrollRef = React.useRef<HTMLDivElement>(null);
-
-  React.useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [adviceHistory, realTimeAdvice]);
-
-  // Dynamic styles based on isLarge
-  const avatarSize = isLarge ? '80px' : '40px';
-  const fontSize = isLarge ? '28px' : '14px';
-  const bubblePadding = isLarge ? '24px 32px' : '10px 14px';
-  const gapSize = isLarge ? '24px' : '12px';
+const AdvicePanel: React.FC<AdvicePanelProps> = ({ realTimeAdvice, isLarge = false }) => {
   const headerFontSize = isLarge ? '20px' : '14px';
   const iconSize = isLarge ? '24px' : '14px';
+  const adviceFontSize = isLarge ? '28px' : '16px';
+  const avatarSize = isLarge ? '120px' : '60px';
+
+  const hasAdvice = realTimeAdvice && realTimeAdvice.trim().length > 0;
 
   return (
     <div style={{
@@ -51,26 +41,23 @@ const AdvicePanel: React.FC<AdvicePanelProps> = ({ realTimeAdvice, adviceHistory
         flexShrink: 0
       }}>
         <BulbOutlined style={{ color: '#faad14', fontSize: iconSize }} />
-        AIお地蔵さんのアドバイス履歴
+        AIお地蔵さんのアドバイス
       </div>
 
-      {/* Scrollable Content */}
-      <div
-        ref={scrollRef}
-        style={{
-          flex: 1,
-          overflowY: 'auto',
-          padding: isLarge ? '32px' : '16px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: isLarge ? '32px' : '16px'
-        }}
-      >
-        {adviceHistory.length === 0 && (
-          <div style={{ textAlign: 'center', color: '#bfbfbf', marginTop: '20px', fontSize: isLarge ? '24px' : '14px' }}>
+      {/* Content */}
+      <div style={{
+        flex: 1,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: isLarge ? '40px' : '24px',
+      }}>
+        {!hasAdvice ? (
+          /* 待機中 */
+          <div style={{ textAlign: 'center', color: '#bfbfbf', fontSize: isLarge ? '24px' : '14px' }}>
             <div style={{
-              width: isLarge ? '120px' : '60px',
-              height: isLarge ? '120px' : '60px',
+              width: avatarSize,
+              height: avatarSize,
               borderRadius: '50%',
               background: '#e6f7ff',
               margin: '0 auto 16px',
@@ -79,61 +66,58 @@ const AdvicePanel: React.FC<AdvicePanelProps> = ({ realTimeAdvice, adviceHistory
               justifyContent: 'center'
             }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/jizo.png" alt="Silent Jizo" style={{ width: isLarge ? '80px' : '40px', height: isLarge ? '80px' : '40px', objectFit: 'cover', opacity: 0.5 }} />
+              <img
+                src="/jizo.png"
+                alt="Silent Jizo"
+                style={{ width: '70%', height: '70%', objectFit: 'cover', opacity: 0.5 }}
+              />
             </div>
             まだアドバイスはありません...<br />
             お地蔵さんが見守っています
           </div>
-        )}
-
-        {adviceHistory.map((advice, index) => (
-          <div key={index} style={{
+        ) : (
+          /* 現在のアドバイスを大きく表示 */
+          <div style={{
             display: 'flex',
-            flexDirection: 'row',
-            alignItems: 'flex-start',
-            gap: gapSize
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: isLarge ? '32px' : '20px',
+            width: '100%',
           }}>
             <div style={{
-              flexShrink: 0,
               width: avatarSize,
-              textAlign: 'center'
-            }}>
-              <div style={{
-                width: avatarSize,
-                height: avatarSize,
-                borderRadius: '50%',
-                overflow: 'hidden',
-                background: '#fff',
-                border: '1px solid #1890ff',
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center'
-              }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="/jizo.png"
-                  alt="AI Jizo"
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                />
-              </div>
-            </div>
-
-            <div style={{
-              position: 'relative',
+              height: avatarSize,
+              borderRadius: '50%',
+              overflow: 'hidden',
               background: '#fff',
-              padding: bubblePadding,
-              borderRadius: '12px',
-              borderTopLeftRadius: '2px',
-              boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-              flex: 1,
-              maxWidth: '85%'
+              border: '2px solid #1890ff',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              flexShrink: 0,
             }}>
-              <div style={{ color: '#262626', lineHeight: '1.5', fontSize: fontSize }}>
-                {advice}
-              </div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/jizo.png"
+                alt="AI Jizo"
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              />
+            </div>
+            <div style={{
+              background: '#fff',
+              padding: isLarge ? '32px 40px' : '16px 20px',
+              borderRadius: '16px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+              fontSize: adviceFontSize,
+              color: '#262626',
+              lineHeight: '1.7',
+              textAlign: 'center',
+              width: '100%',
+            }}>
+              {realTimeAdvice}
             </div>
           </div>
-        ))}
+        )}
       </div>
     </div>
   );
