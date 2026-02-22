@@ -63,8 +63,10 @@ export default function SessionPage() {
 
   // Session State
   const [messages, setMessages] = useState<{ speaker: string, text: string, time: string }[]>([]);
-  const [realTimeAdvice, setRealTimeAdvice] = useState<string>('会話を待っています...');
+  const [realTimeAdvice, setRealTimeAdvice] = useState<string>('');
   const [adviceHistory, setAdviceHistory] = useState<string[]>([]);
+  const [adviceChatHistory, setAdviceChatHistory] = useState<{ role: 'user' | 'model'; parts: { text: string }[] }[]>([]);
+  const adviceChatHistoryRef = useRef<{ role: 'user' | 'model'; parts: { text: string }[] }[]>([]);
 
   const [isMindMapMode, setIsMindMapMode] = useState(false);
   // Face-to-Face mode state
@@ -234,7 +236,8 @@ export default function SessionPage() {
           body: JSON.stringify({
             transcript: recentMessages,
             theme: sessionData?.theme || 'General Check-in',
-            subordinateTraits: subordinate?.traits || []
+            subordinateTraits: subordinate?.traits || [],
+            chatHistory: adviceChatHistoryRef.current
           })
         });
 
@@ -245,6 +248,10 @@ export default function SessionPage() {
           lastAdviceTimeRef.current = Date.now();
           setRealTimeAdvice(data.advice);
           setAdviceHistory(prev => [...prev, data.advice]);
+          if (data.updatedChatHistory) {
+            adviceChatHistoryRef.current = data.updatedChatHistory;
+            setAdviceChatHistory(data.updatedChatHistory);
+          }
         }
       } catch (error) {
         console.error('Failed to fetch AI advice:', error);
