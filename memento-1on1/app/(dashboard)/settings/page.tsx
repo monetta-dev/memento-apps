@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, Suspense } from 'react';
 import { Typography, Card, Switch, Avatar, Button, message, Spin, Tag, Select, Input } from 'antd';
 import { CalendarOutlined, MessageOutlined, LinkOutlined, DisconnectOutlined, GoogleOutlined } from '@ant-design/icons';
 import { createClientComponentClient, getOAuthRedirectUrl } from '@/lib/supabase';
@@ -27,7 +27,7 @@ type BusinessIntegration = {
 
 const { Title } = Typography;
 
-export default function SettingsPage() {
+function SettingsPageContent() {
   const router = useRouter();
   // Removed custom language hook - hardcoding Japanese
   const [googleConnected, setGoogleConnected] = useState(false);
@@ -825,5 +825,17 @@ export default function SettingsPage() {
         </div>
       </Card>
     </div >
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#f5f7fa' }}>
+        <Spin size="large" tip="設定を読み込んでいます..." />
+      </div>
+    }>
+      <SettingsPageContent />
+    </Suspense>
   );
 }
