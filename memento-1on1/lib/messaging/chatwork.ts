@@ -37,6 +37,44 @@ export async function sendChatworkMessage(
 
     if (!response.ok) {
         const body = await response.text();
-        throw new Error(`Chatwork API error: ${response.status} ${body}`);
+        // 401 の場合は呼び出し元で検知できるようにする
+        const error = new Error(`Chatwork API error: ${response.status} ${body}`);
+        (error as any).status = response.status;
+        throw error;
     }
+}
+
+/**
+ * Chatwork のアクセストークンをリフレッシュする
+ */
+export async function refreshChatworkToken(refreshToken: string): Promise<{ access_token: string; refresh_token: string }> {
+    const clientId = process.env.CHATWORK_CLIENT_ID;
+    const clientSecret = process.env.CHATWORK_CLIENT_SECRET;
+
+    if (!clientId || !clientSecret) {
+        throw new Error('Chatwork Client configuration is missing');
+    }
+
+    const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+    const response = await fetch('https://oauth.chatwork.com/token', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Authorization': `Basic ${credentials}`,
+        },
+        body: new URLSearchParams({
+            grant_type: 'refresh_token',
+            refresh_token: refreshToken,
+        }),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(`Chatwork token refresh failed: ${data.error_description || data.error}`);
+    }
+
+    return {
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+    };
 }
