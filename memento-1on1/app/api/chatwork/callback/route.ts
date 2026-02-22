@@ -94,16 +94,23 @@ export async function GET(req: NextRequest) {
 
     console.log(`Chatwork rooms found: ${groupRooms.length}`, groupRooms);
 
+    console.log(`[DEBUG] Chatwork callback started for user: ${userId}`);
+
     // 一時的に access_token と rooms を DB に保存（room 未選択状態）
     const supabase = createServiceRoleClient();
 
     // 手動 upsert
-    const { data: existing } = await supabase
+    const { data: existing, error: selectError } = await supabase
         .from('messaging_integrations')
         .select('id')
         .eq('user_id', userId)
         .eq('provider', 'chatwork')
         .maybeSingle();
+
+    if (selectError) {
+        console.error('[DEBUG] Chatwork select error:', selectError);
+        return NextResponse.redirect(`${siteUrl}/settings?chatwork=error&reason=db_error_select_${selectError.code || 'unknown'}`);
+    }
 
     const payload = {
         user_id: userId,
@@ -117,29 +124,31 @@ export async function GET(req: NextRequest) {
             rooms: groupRooms,
             scope: tokenData.scope,
             refresh_token: tokenData.refresh_token,
+            updated_at: new Date().toISOString()
         },
     };
 
     let result;
     if (existing) {
+        console.log('[DEBUG] Updating existing Chatwork integration:', existing.id);
         result = await supabase
             .from('messaging_integrations')
             .update(payload)
             .eq('id', existing.id);
     } else {
+        console.log('[DEBUG] Inserting new Chatwork integration');
         result = await supabase
             .from('messaging_integrations')
             .insert(payload);
     }
 
     if (result.error) {
-        console.error('Failed to save Chatwork integration:', result.error);
-        return NextResponse.redirect(`${siteUrl}/settings?chatwork=error&reason=db_error_${result.error.code || 'unknown'}`);
+        const method = existing ? 'update' : 'insert';
+        console.error(`[DEBUG] Chatwork ${method} error:`, result.error);
+        return NextResponse.redirect(`${siteUrl}/settings?chatwork=error&reason=db_error_${method}_${result.error.code || 'unknown'}`);
     }
 
     // rooms を base64 でエンコードして設定画面に渡す
-    const roomsParam = Buffer.from(JSON.stringify(groupRooms)).toString('base64url');
-    return NextResponse.redirect(
-        `${siteUrl}/settings?chatwork=select_room&rooms=${roomsParam}`
-    );
+    const roomsBase64 = Buffer.from(JSON.stringify(groupRooms)).toString('base64url');
+    return NextResponse.redirect(`${siteUrl}/settings?chatwork=select_room&rooms=${roomsBase64}&v=2`);
 }

@@ -82,16 +82,23 @@ export async function GET(req: NextRequest) {
         return NextResponse.redirect(`${siteUrl}/settings?slack=error&reason=no_webhook`);
     }
 
+    console.log(`[DEBUG] Slack callback started for user: ${userId}`);
+
     // Service Role クライアントでDBに保存
     const supabase = createServiceRoleClient();
 
     // 手動 upsert: まず存在確認
-    const { data: existing } = await supabase
+    const { data: existing, error: selectError } = await supabase
         .from('messaging_integrations')
         .select('id')
         .eq('user_id', userId)
         .eq('provider', 'slack')
         .maybeSingle();
+
+    if (selectError) {
+        console.error('[DEBUG] Slack select error:', selectError);
+        return NextResponse.redirect(`${siteUrl}/settings?slack=error&reason=db_error_select_${selectError.code || 'unknown'}`);
+    }
 
     const payload = {
         user_id: userId,
@@ -104,28 +111,32 @@ export async function GET(req: NextRequest) {
         metadata: {
             team_name: teamName,
             channel_name: channelName,
-            access_token: tokenData.access_token
+            access_token: tokenData.access_token,
+            updated_at: new Date().toISOString()
         },
     };
 
     let result;
     if (existing) {
+        console.log('[DEBUG] Updating existing Slack integration:', existing.id);
         result = await supabase
             .from('messaging_integrations')
             .update(payload)
             .eq('id', existing.id);
     } else {
+        console.log('[DEBUG] Inserting new Slack integration');
         result = await supabase
             .from('messaging_integrations')
             .insert(payload);
     }
 
     if (result.error) {
-        console.error('Failed to save Slack integration:', result.error);
-        return NextResponse.redirect(`${siteUrl}/settings?slack=error&reason=db_error_${result.error.code || 'unknown'}`);
+        const method = existing ? 'update' : 'insert';
+        console.error(`[DEBUG] Slack ${method} error:`, result.error);
+        return NextResponse.redirect(`${siteUrl}/settings?slack=error&reason=db_error_${method}_${result.error.code || 'unknown'}`);
     }
 
     return NextResponse.redirect(
-        `${siteUrl}/settings?slack=connected&channel=${encodeURIComponent(channelName ?? '')}`
+        `${siteUrl}/settings?slack=connected&channel=${encodeURIComponent(channelName ?? '')}&v=2`
     );
 }
