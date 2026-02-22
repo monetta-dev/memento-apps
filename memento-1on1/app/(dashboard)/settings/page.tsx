@@ -855,7 +855,7 @@ function SettingsPageContent() {
                 }
               </div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {businessIntegrations.lineworks && (
+                {businessIntegrations.lineworks && process.env.NODE_ENV === 'development' && (
                   <Button
                     size="small"
                     onClick={async () => {
