@@ -96,7 +96,16 @@ export async function GET(req: NextRequest) {
 
     // 一時的に access_token と rooms を DB に保存（room 未選択状態）
     const supabase = createServiceRoleClient();
-    const { error: dbError } = await supabase.from('messaging_integrations').upsert({
+
+    // 手動 upsert
+    const { data: existing } = await supabase
+        .from('messaging_integrations')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('provider', 'chatwork')
+        .maybeSingle();
+
+    const payload = {
         user_id: userId,
         provider: 'chatwork',
         api_token: tokenData.access_token,
@@ -109,11 +118,23 @@ export async function GET(req: NextRequest) {
             scope: tokenData.scope,
             refresh_token: tokenData.refresh_token,
         },
-    }, { onConflict: 'user_id,provider' });
+    };
 
-    if (dbError) {
-        console.error('Failed to save Chatwork integration:', dbError);
-        return NextResponse.redirect(`${siteUrl}/settings?chatwork=error&reason=db_error`);
+    let result;
+    if (existing) {
+        result = await supabase
+            .from('messaging_integrations')
+            .update(payload)
+            .eq('id', existing.id);
+    } else {
+        result = await supabase
+            .from('messaging_integrations')
+            .insert(payload);
+    }
+
+    if (result.error) {
+        console.error('Failed to save Chatwork integration:', result.error);
+        return NextResponse.redirect(`${siteUrl}/settings?chatwork=error&reason=db_error_${result.error.code || 'unknown'}`);
     }
 
     // rooms を base64 でエンコードして設定画面に渡す

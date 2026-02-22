@@ -84,27 +84,45 @@ export async function GET(req: NextRequest) {
 
     // Service Role クライアントでDBに保存
     const supabase = createServiceRoleClient();
-    const { error: dbError } = await supabase
-        .from('messaging_integrations')
-        .upsert({
-            user_id: userId,
-            provider: 'slack',
-            webhook_url: webhookUrl,
-            api_token: null,    // 明示的にnull設定
-            room_id: null,      // 明示的にnull設定
-            display_name: `${teamName ?? 'Slack'} ${channelName ? `#${channelName}` : ''}`.trim(),
-            enabled: true,
-            metadata: {
-                team_name: teamName,
-                channel_name: channelName,
-                access_token: tokenData.access_token
-            },
-        }, { onConflict: 'user_id,provider' });
 
-    if (dbError) {
-        console.error('Failed to save Slack integration:', dbError);
-        // 本番環境でのデバッグを容易にするため、理由に詳細を含める（本番では注意が必要だが今は解決優先）
-        return NextResponse.redirect(`${siteUrl}/settings?slack=error&reason=db_error_${dbError.code || 'unknown'}`);
+    // 手動 upsert: まず存在確認
+    const { data: existing } = await supabase
+        .from('messaging_integrations')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('provider', 'slack')
+        .maybeSingle();
+
+    const payload = {
+        user_id: userId,
+        provider: 'slack',
+        webhook_url: webhookUrl,
+        api_token: null,
+        room_id: null,
+        display_name: `${teamName ?? 'Slack'} ${channelName ? `#${channelName}` : ''}`.trim(),
+        enabled: true,
+        metadata: {
+            team_name: teamName,
+            channel_name: channelName,
+            access_token: tokenData.access_token
+        },
+    };
+
+    let result;
+    if (existing) {
+        result = await supabase
+            .from('messaging_integrations')
+            .update(payload)
+            .eq('id', existing.id);
+    } else {
+        result = await supabase
+            .from('messaging_integrations')
+            .insert(payload);
+    }
+
+    if (result.error) {
+        console.error('Failed to save Slack integration:', result.error);
+        return NextResponse.redirect(`${siteUrl}/settings?slack=error&reason=db_error_${result.error.code || 'unknown'}`);
     }
 
     return NextResponse.redirect(
