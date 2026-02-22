@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { Typography, Card, Switch, Avatar, Button, message, Spin, Tag, Select, Input } from 'antd';
 import { CalendarOutlined, MessageOutlined, LinkOutlined, DisconnectOutlined, GoogleOutlined } from '@ant-design/icons';
 import { createClientComponentClient, getOAuthRedirectUrl } from '@/lib/supabase';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
 
 type LineSettings = {
@@ -13,6 +13,16 @@ type LineSettings = {
   enabled: boolean;
   line_display_name?: string;
   is_friend?: boolean;
+};
+
+type BusinessMessagingProvider = 'slack' | 'chatwork';
+
+type BusinessIntegration = {
+  provider: BusinessMessagingProvider;
+  webhookUrl?: string;
+  apiToken?: string;
+  roomId?: string;
+  enabled: boolean;
 };
 
 const { Title } = Typography;
@@ -28,7 +38,14 @@ export default function SettingsPage() {
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [userEmail, setUserEmail] = useState<string>('');
   const [isGoogleAuth, setIsGoogleAuth] = useState(false);
+  // 業務メッセージサービス連携
+  const [businessIntegrations, setBusinessIntegrations] = useState<Partial<Record<BusinessMessagingProvider, BusinessIntegration>>>({})
+  const [chatworkRooms, setChatworkRooms] = useState<{ id: number; name: string }[]>([]);
+  const [chatworkSelectedRoom, setChatworkSelectedRoom] = useState<number | null>(null);
+  const [chatworkRoomSaving, setChatworkRoomSaving] = useState(false);
+  const [businessLoading, setBusinessLoading] = useState<BusinessMessagingProvider | null>(null);
   const supabase = createClientComponentClient();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     const checkAuthStatus = async () => {
@@ -120,6 +137,70 @@ export default function SettingsPage() {
     checkAuthStatus();
   }, [supabase, router]);
 
+  // 業務メッセージ連携の読み込み
+  useEffect(() => {
+    const fetchBusinessIntegrations = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase
+        .from('messaging_integrations')
+        .select('provider, webhook_url, api_token, room_id, enabled')
+        .eq('user_id', user.id)
+        .eq('enabled', true);
+      if (data) {
+        const map: Partial<Record<BusinessMessagingProvider, BusinessIntegration>> = {};
+        data.forEach((row: { provider: string; webhook_url?: string; api_token?: string; room_id?: string; enabled: boolean }) => {
+          const p = row.provider as BusinessMessagingProvider;
+          map[p] = { provider: p, webhookUrl: row.webhook_url ?? undefined, apiToken: row.api_token ?? undefined, roomId: row.room_id ?? undefined, enabled: row.enabled };
+        });
+        setBusinessIntegrations(map);
+      }
+    };
+    fetchBusinessIntegrations();
+  }, [supabase]);
+
+  // Slack OAuthコールバック検知
+  useEffect(() => {
+    const slackStatus = searchParams.get('slack');
+    if (!slackStatus) return;
+    if (slackStatus === 'connected') {
+      const channel = searchParams.get('channel');
+      message.success(`Slack${channel ? ` (#${channel})` : ''} を連携しました`);
+      setBusinessIntegrations(prev => ({ ...prev, slack: { provider: 'slack', enabled: true } }));
+    } else if (slackStatus === 'cancelled') {
+      message.info('Slack連携をキャンセルしました');
+    } else {
+      const reason = searchParams.get('reason') || 'unknown';
+      message.error(`Slack連携に失敗しました(${reason})`);
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.delete('slack'); url.searchParams.delete('channel'); url.searchParams.delete('reason');
+    window.history.replaceState({}, '', url.toString());
+  }, [searchParams]);
+
+  // Chatwork OAuthコールバック検知
+  useEffect(() => {
+    const cwStatus = searchParams.get('chatwork');
+    if (!cwStatus) return;
+    if (cwStatus === 'select_room') {
+      const roomsParam = searchParams.get('rooms');
+      if (roomsParam) {
+        // base64url → base64 変換してからatob（ブラウザ対応）
+        const base64 = roomsParam.replace(/-/g, '+').replace(/_/g, '/');
+        const rooms = JSON.parse(atob(base64)) as { id: number; name: string }[];
+        setChatworkRooms(rooms);
+      }
+    } else if (cwStatus === 'cancelled') {
+      message.info('Chatwork連携をキャンセルしました');
+    } else if (cwStatus === 'error') {
+      const reason = searchParams.get('reason') || 'unknown';
+      message.error(`Chatwork連携に失敗しました (${reason})`);
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.delete('chatwork'); url.searchParams.delete('rooms'); url.searchParams.delete('reason');
+    window.history.replaceState({}, '', url.toString());
+  }, [searchParams]);
+
   const handleGoogleConnect = async () => {
     setGoogleLoading(true);
     try {
@@ -143,7 +224,7 @@ export default function SettingsPage() {
     } catch (error: unknown) {
       console.error('Google OAuth error:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
-      message.error(`Googleカレンダーの連携に失敗しました: ${errorMessage}`);
+      message.error(`Googleカレンダーの連携に失敗しました: ${errorMessage} `);
       setGoogleLoading(false);
     }
   };
@@ -235,7 +316,7 @@ export default function SettingsPage() {
     } catch (error: unknown) {
       console.error('❌ Friend status check error:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
-      message.error(`友達状態の確認に失敗しました: ${errorMessage}`);
+      message.error(`友達状態の確認に失敗しました: ${errorMessage} `);
     } finally {
       setLineLoading(false);
     }
@@ -310,7 +391,7 @@ export default function SettingsPage() {
         reconnectParameter: reconnect,
         lineSettings
       });
-      message.error(`LINE連携に失敗しました: ${errorMessage}`);
+      message.error(`LINE連携に失敗しました: ${errorMessage} `);
     } finally {
       console.log('🔍 LINE Connect Debug - Frontend End (loading stopped)');
       setLineLoading(false);
@@ -319,13 +400,11 @@ export default function SettingsPage() {
 
   const handleLineDisconnect = async () => {
     try {
-      // モック実装: LINE連携解除API
       const response = await fetch('/api/line/disconnect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: userEmail })
       });
-
       if (response.ok) {
         setLineConnected(false);
         message.success('LINE連携を解除しました');
@@ -334,9 +413,53 @@ export default function SettingsPage() {
       }
     } catch (error) {
       console.error('LINE disconnect error:', error);
-      // モックフォールバック
       setLineConnected(false);
       message.success('LINE連携を解除しました（モック実装）');
+    }
+  };
+
+  const handleBusinessConnect = async (provider: BusinessMessagingProvider) => {
+    setBusinessLoading(provider);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('ログインが必要です');
+
+      const body: Record<string, string> = { userId: user.id, provider };
+      if (provider === 'slack' || provider === 'chatwork') {
+        // OAuth経由のためこのルートは使用しない
+        return;
+      }
+
+      const res = await fetch('/api/messaging/connect', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+      });
+      if (!res.ok) throw new Error((await res.json()).error || '連携に失敗しました');
+
+      setBusinessIntegrations(prev => ({ ...prev, [provider]: { provider, enabled: true } }));
+      message.success(`${provider} 連携を設定しました`);
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : '連携に失敗しました');
+    } finally {
+      setBusinessLoading(null);
+    }
+  };
+
+  const handleBusinessDisconnect = async (provider: BusinessMessagingProvider) => {
+    setBusinessLoading(provider);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('ログインが必要です');
+      const res = await fetch('/api/messaging/disconnect', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, provider })
+      });
+      if (!res.ok) throw new Error('切断に失敗しました');
+      setBusinessIntegrations(prev => { const next = { ...prev }; delete next[provider]; return next; });
+      message.success(`${provider} 連携を解除しました`);
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : '切断に失敗しました');
+    } finally {
+      setBusinessLoading(null);
     }
   };
 
@@ -378,7 +501,7 @@ export default function SettingsPage() {
       }
 
       setCurrentOrg({ id: data.organization.id, name: data.organization.name });
-      message.success(`${data.organization.name}に参加しました！`);
+      message.success(`${data.organization.name} に参加しました！`);
       setOrgCode('');
     } catch (err) {
       console.error(err);
@@ -501,45 +624,14 @@ export default function SettingsPage() {
                           <li>以下のQRコードをスキャン</li>
                         </ol>
                         <div style={{ marginTop: 12, textAlign: 'center' }}>
-                          {/* QRコード生成 */}
-                          <div style={{
-                            width: 150,
-                            height: 150,
-                            margin: '0 auto',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center'
-                          }}>
-                            <QRCodeSVG
-                              value={process.env.NEXT_PUBLIC_LINE_FRIEND_URL || 'https://lin.ee/z7uMKon'}
-                              size={150}
-                              level="H"
-                              includeMargin={false}
-                              bgColor="#ffffff"
-                              fgColor="#000000"
-                            />
+                          <div style={{ width: 150, height: 150, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <QRCodeSVG value={process.env.NEXT_PUBLIC_LINE_FRIEND_URL || 'https://lin.ee/z7uMKon'} size={150} level="H" includeMargin={false} bgColor="#ffffff" fgColor="#000000" />
                           </div>
-                          <div style={{ marginTop: 8, fontSize: '11px', color: '#666' }}>
-                            ※ QRコードが読み取れない場合は、URLを直接開いてください
-                          </div>
+                          <div style={{ marginTop: 8, fontSize: '11px', color: '#666' }}>※ QRコードが読み取れない場合は、URLを直接開いてください</div>
                         </div>
                         <div style={{ marginTop: 12, display: 'flex', gap: 8, justifyContent: 'center' }}>
-                          <Button
-                            type="primary"
-                            size="small"
-                            onClick={() => window.open(process.env.NEXT_PUBLIC_LINE_FRIEND_URL || 'https://lin.ee/z7uMKon', '_blank')}
-                          >
-                            LINEで友だち追加
-                          </Button>
-                          <Button
-                            type="default"
-                            size="small"
-                            onClick={handleCheckFriendStatus}
-                            loading={lineLoading}
-                            disabled={lineLoading}
-                          >
-                            状態を更新
-                          </Button>
+                          <Button type="primary" size="small" onClick={() => window.open(process.env.NEXT_PUBLIC_LINE_FRIEND_URL || 'https://lin.ee/z7uMKon', '_blank')}>LINEで友だち追加</Button>
+                          <Button type="default" size="small" onClick={handleCheckFriendStatus} loading={lineLoading} disabled={lineLoading}>状態を更新</Button>
                         </div>
                       </div>
                     </div>
@@ -548,40 +640,15 @@ export default function SettingsPage() {
               </div>
               <div style={{ marginLeft: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
                 {item.isGoogleCalendar ? (
-                  // Google Calendar: Show status tag for Google auth users, button for email auth users
                   isGoogleAuth ? (
                     <Tag color="success" style={{ margin: 0 }}>連携可能</Tag>
                   ) : (
-                    <Button
-                      type="primary"
-                      size="small"
-                      icon={<GoogleOutlined />}
-                      onClick={item.onConnect}
-                      loading={item.loading}
-                      disabled={item.disabled || item.loading}
-                    >
-                      Googleでサインイン
-                    </Button>
+                    <Button type="primary" size="small" icon={<GoogleOutlined />} onClick={item.onConnect} loading={item.loading} disabled={item.disabled || item.loading}>Googleでサインイン</Button>
                   )
                 ) : (
-                  // LINE: Keep existing switch and button
                   <>
-                    <Switch
-                      checkedChildren="連携中"
-                      unCheckedChildren="未連携"
-                      checked={item.connected}
-                      onChange={(checked) => checked ? item.onConnect() : item.onDisconnect()}
-                      loading={item.loading}
-                      disabled={item.disabled || item.loading}
-                    />
-                    <Button
-                      type="default"
-                      size="small"
-                      icon={item.connected ? <DisconnectOutlined /> : <LinkOutlined />}
-                      onClick={item.connected ? item.onDisconnect : item.onConnect}
-                      loading={item.loading}
-                      disabled={item.disabled || item.loading}
-                    >
+                    <Switch checkedChildren="連携中" unCheckedChildren="未連携" checked={item.connected} onChange={(checked) => checked ? item.onConnect() : item.onDisconnect()} loading={item.loading} disabled={item.disabled || item.loading} />
+                    <Button type="default" size="small" icon={item.connected ? <DisconnectOutlined /> : <LinkOutlined />} onClick={item.connected ? item.onDisconnect : item.onConnect} loading={item.loading} disabled={item.disabled || item.loading}>
                       {item.connected ? '切断' : '接続'}
                     </Button>
                   </>
@@ -590,6 +657,163 @@ export default function SettingsPage() {
             </div>
           ))}
         </div>
+
+        {/* 業務メッセージサービス連携 */}
+        <div style={{ marginTop: 24, borderTop: '1px solid #f0f0f0', paddingTop: 20 }}>
+          <div style={{ fontWeight: 'bold', marginBottom: 16, fontSize: '14px', color: '#595959' }}>💼 業務メッセージサービス（セッション後の総括を自動送信）</div>
+
+          {/* Slack */}
+          <div style={{ marginBottom: 20, padding: '16px', background: '#fafafa', borderRadius: '8px', border: '1px solid #f0f0f0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: '20px' }}>💬</span>
+                <span style={{ fontWeight: 'bold' }}>Slack</span>
+                {businessIntegrations.slack
+                  ? <Tag color="success">連携済み</Tag>
+                  : <Tag color="default">未連携</Tag>
+                }
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {businessIntegrations.slack && process.env.NODE_ENV === 'development' && (
+                  <Button
+                    size="small"
+                    onClick={async () => {
+                      const { data: { user } } = await supabase.auth.getUser();
+                      if (!user) { message.error('ログインしてください'); return; }
+                      const res = await fetch('/api/messaging/send', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          userId: user.id,
+                          provider: 'slack',
+                          message: '🧪 これはMemento 1on1からのテストメッセージです。Slack連携が正しく機能しています！',
+                        }),
+                      });
+                      if (res.ok) message.success('テストメッセージを送信しました');
+                      else message.error('送信に失敗しました');
+                    }}
+                  >
+                    テスト送信
+                  </Button>
+                )}
+                <Button
+                  type="primary"
+                  icon={<span style={{ marginRight: 4 }}>💬</span>}
+                  onClick={() => { window.location.href = '/api/slack/authorize'; }}
+                >
+                  {businessIntegrations.slack ? 'Slackで再連携' : 'Slackで連携する'}
+                </Button>
+                {businessIntegrations.slack && (
+                  <Button danger loading={businessLoading === 'slack'} onClick={() => handleBusinessDisconnect('slack')}>切断</Button>
+                )}
+              </div>
+            </div>
+            {businessIntegrations.slack && (
+              <div style={{ marginTop: 10, fontSize: '13px', color: '#52c41a' }}>
+                ✅ Slackチャンネルへの送信が有効です。セッション終了時に総括が自動送信されます。
+              </div>
+            )}
+            {!businessIntegrations.slack && (
+              <div style={{ marginTop: 8, fontSize: '12px', color: '#8c8c8c' }}>ボタンをクリックするとSlackの認証画面が開きます。送信先チャンネルを選ぶだけで完了します。</div>
+            )}
+          </div>
+
+          {/* Chatwork */}
+          <div style={{ padding: '16px', background: '#fafafa', borderRadius: '8px', border: '1px solid #f0f0f0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: '20px' }}>💼</span>
+                <span style={{ fontWeight: 'bold' }}>Chatwork</span>
+                {businessIntegrations.chatwork
+                  ? <Tag color="success">連携済み</Tag>
+                  : <Tag color="default">未連携</Tag>
+                }
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {businessIntegrations.chatwork && process.env.NODE_ENV === 'development' && (
+                  <Button
+                    size="small"
+                    onClick={async () => {
+                      const { data: { user } } = await supabase.auth.getUser();
+                      if (!user) { message.error('ログインしてください'); return; }
+                      const res = await fetch('/api/messaging/send', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          userId: user.id, provider: 'chatwork',
+                          message: '🧪 これはMemento 1on1からのテストメッセージです。Chatwork連携が正しく機能しています！',
+                        }),
+                      });
+                      if (res.ok) message.success('テストメッセージを送信しました');
+                      else { const d = await res.json(); message.error(`送信失敗: ${d.details || d.error}`); }
+                    }}
+                  >テスト送信</Button>
+                )}
+                <Button
+                  type="primary"
+                  icon={<span style={{ marginRight: 4 }}>💼</span>}
+                  onClick={() => { window.location.href = '/api/chatwork/authorize'; }}
+                >
+                  {businessIntegrations.chatwork ? 'Chatworkで再連携' : 'Chatworkで連携する'}
+                </Button>
+                {businessIntegrations.chatwork && (
+                  <Button danger loading={businessLoading === 'chatwork'} onClick={() => handleBusinessDisconnect('chatwork')}>切断</Button>
+                )}
+              </div>
+            </div>
+
+            {/* ルーム選択（OAuth後に表示） */}
+            {chatworkRooms.length > 0 && (
+              <div style={{ marginTop: 12, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '13px', color: '#595959' }}>💬 送信先ルームを選んでください：</span>
+                <Select
+                  style={{ minWidth: 240 }}
+                  placeholder="ルームを選択"
+                  value={chatworkSelectedRoom}
+                  onChange={val => setChatworkSelectedRoom(val)}
+                  options={chatworkRooms.map(r => ({ value: r.id, label: r.name }))}
+                />
+                <Button
+                  type="primary"
+                  loading={chatworkRoomSaving}
+                  disabled={chatworkSelectedRoom === null}
+                  onClick={async () => {
+                    if (chatworkSelectedRoom === null) return;
+                    setChatworkRoomSaving(true);
+                    const room = chatworkRooms.find(r => r.id === chatworkSelectedRoom);
+                    const res = await fetch('/api/chatwork/select-room', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ roomId: chatworkSelectedRoom, roomName: room?.name ?? '' }),
+                    });
+                    setChatworkRoomSaving(false);
+                    if (res.ok) {
+                      message.success(`Chatwork #${room?.name} を連携しました`);
+                      setChatworkRooms([]);
+                      setChatworkSelectedRoom(null);
+                      setBusinessIntegrations(prev => ({
+                        ...prev,
+                        chatwork: { provider: 'chatwork', roomId: String(chatworkSelectedRoom), enabled: true },
+                      }));
+                    } else {
+                      message.error('ルームの保存に失敗しました');
+                    }
+                  }}
+                >このルームに送信</Button>
+              </div>
+            )}
+
+            {businessIntegrations.chatwork && chatworkRooms.length === 0 && (
+              <div style={{ marginTop: 10, fontSize: '13px', color: '#52c41a' }}>
+                ✅ Chatworkルームへの送信が有効です。セッション終了時に総括が自動送信されます。
+              </div>
+            )}
+            {!businessIntegrations.chatwork && chatworkRooms.length === 0 && (
+              <div style={{ marginTop: 8, fontSize: '12px', color: '#8c8c8c' }}>ボタンをクリックするとChatworkの認証画面が開きます。認証後に送信先ルームを選ぶだけで完了します。</div>
+            )}
+          </div>
+        </div>
+
         <div style={{ marginTop: 16, padding: 12, background: isGoogleAuth ? 'rgba(183, 235, 143, 0.1)' : 'rgba(255, 251, 230, 0.5)', border: isGoogleAuth ? '1px solid #b7eb8f' : '1px solid #ffe58f', borderRadius: 4 }}>
           <Typography.Text type="secondary">
             {isGoogleAuth ? (

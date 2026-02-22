@@ -509,14 +509,6 @@ export default function SessionPage() {
       if (currentSessionData) {
         console.log('handleEndSession - calling updateSession with data');
         try {
-          // Use latest store data
-          // READ directly from store to ensure we have latest even if effect pending
-          // (Though mindMapNodes variable is reactive, inside async handler it might be stale closure if not careful? 
-          // Actually handleEndSession is re-created on render? No it's not wrapped in useCallback... wait, let's check original logic.
-          // Original logic was not shown fully but likely defined in component body.
-          // Ideally we use refs or ensure we have latest.
-          // Since mindMapNodes is from useMindMapStore hook, it updates component.
-
           await updateSession(currentSessionData.id, {
             status: 'completed',
             transcript: transcriptData,
@@ -531,15 +523,65 @@ export default function SessionPage() {
           console.log('handleEndSession - updateSession completed successfully');
         } catch (updateError) {
           console.error('Failed to update session in database:', updateError);
-          // Continue to redirect even if database update fails
-          // (e.g., due to updated_at field error which doesn't affect user experience)
         }
       } else {
         console.error('Current session data not found for id:', params.id);
       }
 
+      // 4. 連携済み業務メッセージサービスへ総括を送信
+      try {
+        const { createClientComponentClient } = await import('@/lib/supabase');
+        const supabase = createClientComponentClient();
+        const { data: { user } } = await supabase.auth.getUser();
+
+        if (user) {
+          const { data: integrations } = await supabase
+            .from('messaging_integrations')
+            .select('provider')
+            .eq('user_id', user.id)
+            .eq('enabled', true);
+
+          if (integrations && integrations.length > 0) {
+            const summaryMessage = [
+              `📋 1on1 総括: ${sessionData?.theme || 'セッション'}`,
+              '',
+              summary,
+              '',
+              actionItems.length > 0
+                ? `📌 アクション項目:\n${actionItems.map((a, i) => `${i + 1}. ${a}`).join('\n')}`
+                : '',
+            ].filter(Boolean).join('\n');
+
+            await Promise.allSettled(
+              integrations.map(({ provider }) =>
+                fetch('/api/messaging/send', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    userId: user.id,
+                    provider,
+                    message: summaryMessage,
+                    sessionId: params.id,
+                  }),
+                })
+              )
+            );
+
+            api.success({
+              message: '総括を送信しました',
+              description: `${integrations.map(i => i.provider).join(', ')} に1on1の総括を送信しました`,
+              placement: 'topRight',
+              duration: 4,
+            });
+          }
+        }
+      } catch (msgError) {
+        console.error('Failed to send summary to messaging services:', msgError);
+        // 送信失敗してもリダイレクトは継続
+      }
+
       console.log('handleEndSession - Before redirect, currentSessionData found:', !!currentSessionData);
-      // 4. Redirect to summary page
+      // 5. Redirect to summary page
       console.log('handleEndSession - Redirecting to summary page', { sessionId: params.id });
 
       try {
