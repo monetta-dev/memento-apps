@@ -90,14 +90,21 @@ export async function GET(req: NextRequest) {
             user_id: userId,
             provider: 'slack',
             webhook_url: webhookUrl,
+            api_token: null,    // 明示的にnull設定
+            room_id: null,      // 明示的にnull設定
             display_name: `${teamName ?? 'Slack'} ${channelName ? `#${channelName}` : ''}`.trim(),
             enabled: true,
-            metadata: { team_name: teamName, channel_name: channelName, access_token: tokenData.access_token },
+            metadata: {
+                team_name: teamName,
+                channel_name: channelName,
+                access_token: tokenData.access_token
+            },
         }, { onConflict: 'user_id,provider' });
 
     if (dbError) {
         console.error('Failed to save Slack integration:', dbError);
-        return NextResponse.redirect(`${siteUrl}/settings?slack=error&reason=db_error`);
+        // 本番環境でのデバッグを容易にするため、理由に詳細を含める（本番では注意が必要だが今は解決優先）
+        return NextResponse.redirect(`${siteUrl}/settings?slack=error&reason=db_error_${dbError.code || 'unknown'}`);
     }
 
     return NextResponse.redirect(
