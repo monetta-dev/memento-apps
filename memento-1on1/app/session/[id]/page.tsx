@@ -228,7 +228,7 @@ export default function SessionPage() {
   useEffect(() => {
     const fetchRealTimeAdvice = async () => {
       if (isAnalyzingRef.current || messages.length < 3) return; // Need minimum conversation
-      if (Date.now() - lastAdviceTimeRef.current < 30000) return; // Throttle: min 30 seconds between calls
+      if (Date.now() - lastAdviceTimeRef.current < 15000) return; // Throttle: min 15 seconds between calls
 
       isAnalyzingRef.current = true;
       try {
@@ -270,7 +270,7 @@ export default function SessionPage() {
     };
 
     // Trigger AI analysis when enough messages accumulated and enough time passed
-    if (messages.length >= 3 && Date.now() - lastAdviceTimeRef.current > 30000) {
+    if (messages.length >= 3 && Date.now() - lastAdviceTimeRef.current > 15000) {
       fetchRealTimeAdvice();
     }
   }, [messages, sessionData, subordinate]);
