@@ -13,7 +13,7 @@ const AdvicePanel: React.FC<AdvicePanelProps> = ({ realTimeAdvice, isLarge = fal
   const headerFontSize = isLarge ? '28px' : '20px';
   const iconSize = isLarge ? '32px' : '24px';
   const adviceFontSize = isLarge ? '52px' : '32px';
-  const avatarSize = isLarge ? '160px' : '100px';
+  const avatarWidth = isLarge ? '300px' : '200px';
   const waitingFontSize = isLarge ? '36px' : '24px';
 
   const hasAdvice = realTimeAdvice && realTimeAdvice.trim().length > 0;
@@ -56,23 +56,18 @@ const AdvicePanel: React.FC<AdvicePanelProps> = ({ realTimeAdvice, isLarge = fal
         {!hasAdvice ? (
           /* 待機中 */
           <div style={{ textAlign: 'center', color: '#bfbfbf', fontSize: waitingFontSize }}>
-            <div style={{
-              width: avatarSize,
-              height: avatarSize,
-              borderRadius: '50%',
-              background: '#e6f7ff',
-              margin: '0 auto 24px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/jizo.png"
-                alt="Silent Jizo"
-                style={{ width: '70%', height: '70%', objectFit: 'cover', opacity: 0.5 }}
-              />
-            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/jizo.png"
+              alt="Silent Jizo"
+              style={{
+                width: avatarWidth,
+                objectFit: 'contain',
+                opacity: 0.5,
+                display: 'block',
+                margin: '0 auto 24px',
+              }}
+            />
             まだアドバイスはありません...<br />
             お地蔵さんが見守っています
           </div>
@@ -84,25 +79,25 @@ const AdvicePanel: React.FC<AdvicePanelProps> = ({ realTimeAdvice, isLarge = fal
             alignItems: 'center',
             gap: isLarge ? '24px' : '16px',
             width: '100%',
+            height: '100%',
           }}>
-            {/* 左：地蔵アバター */}
+            {/* 左：地蔵（縦長・自然表示） */}
             <div style={{
-              width: avatarSize,
-              height: avatarSize,
-              borderRadius: '50%',
-              overflow: 'hidden',
-              background: '#fff',
-              border: '3px solid #1890ff',
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
+              width: avatarWidth,
               flexShrink: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src="/jizo.png"
                 alt="AI Jizo"
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                style={{
+                  width: '100%',
+                  objectFit: 'contain',
+                  maxHeight: isLarge ? '680px' : '420px',
+                }}
               />
             </div>
 

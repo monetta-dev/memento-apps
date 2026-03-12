@@ -543,13 +543,11 @@ export default function SessionPage() {
 
           if (integrations && integrations.length > 0) {
             const summaryMessage = [
-              `📋 1on1 総括: ${sessionData?.theme || 'セッション'}`,
-              '',
-              summary,
+              `📋 *1on1 議事録* — ${sessionData?.theme || 'セッション'}`,
               '',
               actionItems.length > 0
-                ? `📌 アクション項目:\n${actionItems.map((a, i) => `${i + 1}. ${a}`).join('\n')}`
-                : '',
+                ? `*📌 アクション項目*\n${actionItems.map((a, i) => `${i + 1}. ${a}`).join('\n')}`
+                : '（アクション項目なし）',
             ].filter(Boolean).join('\n');
 
             await Promise.allSettled(
